@@ -1,5 +1,5 @@
 "use client";
-
+import { apiUrl } from "@/lib/api";
 import { use, useEffect, useRef, useState } from "react";
 
 export default function ProjectPage({ params }) {
@@ -52,7 +52,7 @@ export default function ProjectPage({ params }) {
 
 async function loadProjectLanguages() {
   try {
-    const res = await fetch(`http://127.0.0.1:8000/projects`);
+    const res = await fetch(apiUrl(`/projects`));
     if (!res.ok) return;
 
     const projects = await res.json();
@@ -78,12 +78,12 @@ async function loadProjectLanguages() {
 
 async function loadInterview() {
   const res = await fetch(
-    `http://127.0.0.1:8000/projects/${projectId}/interview`
+    apiUrl(`/projects/${projectId}/interview`)
   );
 
   if (res.status === 404) {
     const startRes = await fetch(
-      `http://127.0.0.1:8000/projects/${projectId}/interview/start`,
+      apiUrl(`/projects/${projectId}/interview/start`),
       { method: "POST" }
     );
 
@@ -94,7 +94,7 @@ async function loadInterview() {
     }
 
     const restarted = await fetch(
-      `http://127.0.0.1:8000/projects/${projectId}/interview`
+      apiUrl(`/projects/${projectId}/interview`)
     );
 
     if (!restarted.ok) {
@@ -117,7 +117,7 @@ async function loadInterview() {
 
 async function loadVocabulary() {
   const res = await fetch(
-    `http://127.0.0.1:8000/projects/${projectId}/vocabulary`
+    apiUrl(`/projects/${projectId}/vocabulary`)
   );
 
   const data = await res.json();
@@ -187,7 +187,7 @@ async function loadVocabulary() {
     setStatus("");
 
     const res = await fetch(
-      `http://127.0.0.1:8000/projects/${projectId}/interview/start`,
+      apiUrl(`/projects/${projectId}/interview/start`),
       { method: "POST" }
     );
 
@@ -216,7 +216,7 @@ async function sendMessage() {
 
   try {
     const res = await fetch(
-      `http://127.0.0.1:8000/projects/${projectId}/interview/message`,
+      apiUrl(`/projects/${projectId}/interview/message`),
       {
         method: "POST",
         headers: {
@@ -253,7 +253,7 @@ async function sendMessage() {
 }
 async function startRoleplay() {
   const res = await fetch(
-    `http://127.0.0.1:8000/projects/${projectId}/roleplay/start`,
+    apiUrl(`/projects/${projectId}/roleplay/start`),
     {
       method: "POST",
     }
@@ -277,7 +277,7 @@ async function sendRoleplayMessage() {
 
   try {
     const res = await fetch(
-      `http://127.0.0.1:8000/projects/${projectId}/roleplay/message`,
+      apiUrl(`/projects/${projectId}/roleplay/message`),
       {
         method: "POST",
         headers: {
@@ -718,7 +718,7 @@ async function submitLearningAnswer() {
 
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/projects/${projectId}/learning/evaluate`,
+        apiUrl(`/projects/${projectId}/learning/evaluate`),
         {
           method: "POST",
           headers: {
@@ -1046,7 +1046,7 @@ async function submitLearningAnswer() {
 
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/projects/${projectId}/vocabulary/${encodedWord}/expand`,
+          apiUrl(`/projects/${projectId}/vocabulary/${encodedWord}/expand`),
           {
             method: "POST",
           }
@@ -1142,7 +1142,7 @@ async function submitLearningAnswer() {
         try {
           const encodedWord = encodeURIComponent(item.word);
           const res = await fetch(
-            `http://127.0.0.1:8000/projects/${projectId}/vocabulary/${encodedWord}/expand`,
+            apiUrl(`/projects/${projectId}/vocabulary/${encodedWord}/expand`),
             {
               method: "POST",
             }
@@ -1657,7 +1657,7 @@ async function submitLearningAnswer() {
                                     setIsRebuildingCard(true);
 
                                     try {
-                                      const res = await fetch(`http://localhost:8000/projects/${projectId}/vocabulary/${encodeURIComponent(currentWord.word)}/rebuild`, {
+                                      const res = await fetch(apiUrl(`/projects/${projectId}/vocabulary/${encodeURIComponent(currentWord.word)}/rebuild`), {
                                         method: "POST",
                                       });
 
@@ -1665,7 +1665,7 @@ async function submitLearningAnswer() {
 
                                       const rebuiltItem = await res.json();
 
-                                      await fetch(`http://localhost:8000/projects/${projectId}/vocabulary/${encodeURIComponent(currentWord.word)}/expand`, {
+                                      await fetch(apiUrl(`/projects/${projectId}/vocabulary/${encodeURIComponent(currentWord.word)}/expand`), {
                                         method: "POST",
                                       });
 

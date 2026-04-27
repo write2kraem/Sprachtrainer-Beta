@@ -1,5 +1,6 @@
 "use client";
 
+import { apiUrl } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -22,7 +23,7 @@ export default function HomePage() {
 
   async function loadProjects() {
     try {
-      const response = await fetch("http://127.0.0.1:8000/projects");
+      const response = await fetch(apiUrl("/projects"));
       const data: Project[] = await response.json();
       setProjects(data);
     } catch (err) {
@@ -62,7 +63,7 @@ export default function HomePage() {
     };
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/projects", {
+      const response = await fetch(apiUrl("/projects"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -75,7 +76,7 @@ export default function HomePage() {
       }
 
       void fetch(
-        `http://127.0.0.1:8000/projects/${newProject.id}/interview/start`,
+        apiUrl(`/projects/${newProject.id}/interview/start`),
         {
           method: "POST",
         }
