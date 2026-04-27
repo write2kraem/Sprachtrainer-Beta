@@ -97,6 +97,53 @@ export default function HomePage() {
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: 32 }}>
+      <section
+        style={{
+          border: "1px solid #ddd",
+          borderRadius: 20,
+          padding: 28,
+          marginBottom: 24,
+          background: "#fafafa",
+        }}
+      >
+        <p style={{ margin: "0 0 8px", color: "#666", fontSize: 14 }}>
+          Beta-Version
+        </p>
+        <h1 style={{ fontSize: 34, fontWeight: "bold", margin: "0 0 12px" }}>
+          Lerne Sprache für dein echtes Leben.
+        </h1>
+        <p style={{ fontSize: 17, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
+          Dieser Sprachtrainer funktioniert anders als klassische Apps.
+          Du lernst nicht allgemeine Vokabeln, sondern genau die Sprache,
+          die du in deinen eigenen Situationen wirklich brauchst.
+        </p>
+        <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
+          Dafür erstellen wir gemeinsam dein persönliches Sprachprojekt.
+          Du beschreibst kurz, was du vorhast – und daraus entstehen automatisch
+          deine Vokabeln, Fragen und Dialoge.
+        </p>
+        <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 16px", color: "#333" }}>
+          Je konkreter du bist, desto besser wird dein Ergebnis.
+        </p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {["Urlaub in Portugal", "Segeltörn in Kroatien", "Restaurant & Smalltalk auf Spanisch", "Französisch für den Tauchkurs"].map((example) => (
+            <span
+              key={example}
+              style={{
+                border: "1px solid #ddd",
+                borderRadius: 999,
+                padding: "7px 11px",
+                background: "white",
+                color: "#333",
+                fontSize: 14,
+              }}
+            >
+              {example}
+            </span>
+          ))}
+        </div>
+      </section>
+
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 24 }}>
         Sprachtrainer
       </h1>
