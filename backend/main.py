@@ -13,6 +13,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://sprachtrainer-beta.vercel.app",
+        "https://sprachtrainer-beta-hzwaqnojj-vector5-learning.vercel.app",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
