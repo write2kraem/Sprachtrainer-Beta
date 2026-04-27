@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
 from models import Project, Message, NewMessage, ProjectSlots
 from database import projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data
@@ -10,7 +11,11 @@ from services.vocabulary import extract_vocabulary_from_slots, expand_vocabulary
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "https://sprachtrainer-beta.vercel.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
