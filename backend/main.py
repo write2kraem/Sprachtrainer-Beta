@@ -1,7 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.cors import CORSMiddleware
-
 from models import Project, Message, NewMessage, ProjectSlots
 from database import projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data
 from services.interview import get_next_question, update_slots
