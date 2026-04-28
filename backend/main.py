@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from models import Project, Message, NewMessage, ProjectSlots
-from database import projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data
+from database import DEFAULT_USER_ID, ensure_user, projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data
 from services.interview import get_next_question, update_slots
 from services.llm import generate_roleplay_opening, continue_roleplay, evaluate_learning_answer_llm
 from services.vocabulary import extract_vocabulary_from_slots, expand_vocabulary_item, rebuild_vocabulary_item
@@ -21,19 +21,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def root():
-    return {"message": "Sprachtrainer Backend läuft"}
 
+def get_user_id(request: Request) -> str:
+    user_id = request.headers.get("X-User-Id", DEFAULT_USER_ID)
+    user_id = user_id.strip() if user_id else DEFAULT_USER_ID
+    ensure_user(user_id)
+    return user_id
 
 @app.get("/projects")
-def get_projects():
-    return projects_db
+def get_projects(request: Request):
+    user_id = get_user_id(request)
+    return projects_db[user_id]
 
 
 @app.post("/projects")
-def create_project(project: Project):
-    projects_db.append(project)
+def create_project(project: Project, request: Request):
+    user_id = get_user_id(request)
+    projects_db[user_id].append(project)
     save_data()
 
     return {
@@ -42,22 +46,24 @@ def create_project(project: Project):
     }
 
 @app.get("/projects/{project_id}/slots")
-def get_project_slots(project_id: int):
-    if project_id not in slots_db:
+def get_project_slots(project_id: int, request: Request):
+    user_id = get_user_id(request)
+    if project_id not in slots_db[user_id]:
         raise HTTPException(status_code=404, detail="Noch keine Slots vorhanden")
-    return slots_db[project_id]
+    return slots_db[user_id][project_id]
 
 
 @app.get("/projects/{project_id}/vocabulary")
-def get_project_vocabulary(project_id: int):
-    project = next((p for p in projects_db if p.id == project_id), None)
+def get_project_vocabulary(project_id: int, request: Request):
+    user_id = get_user_id(request)
+    project = next((p for p in projects_db[user_id] if p.id == project_id), None)
     target_language = project.target_language if project else None
     source_language = getattr(project, "source_language", None) if project else None
 
     if not source_language:
         source_language = "Deutsch"
 
-    if project_id not in vocabulary_db:
+    if project_id not in vocabulary_db[user_id]:
         return {
             "target_language": target_language,
             "source_language": source_language,
@@ -67,12 +73,13 @@ def get_project_vocabulary(project_id: int):
     return {
         "target_language": target_language,
         "source_language": source_language,
-        "vocabulary": vocabulary_db[project_id],
+        "vocabulary": vocabulary_db[user_id][project_id],
     }
 
 @app.get("/projects/{project_id}/vocabulary/by-source")
-def get_project_vocabulary_by_source(project_id: int):
-    if project_id not in vocabulary_db:
+def get_project_vocabulary_by_source(project_id: int, request: Request):
+    user_id = get_user_id(request)
+    if project_id not in vocabulary_db[user_id]:
         return {
             "base_core": [],
             "description": [],
@@ -85,7 +92,7 @@ def get_project_vocabulary_by_source(project_id: int):
         "situation_core": [],
     }
 
-    for item in vocabulary_db[project_id]:
+    for item in vocabulary_db[user_id][project_id]:
         source = getattr(item, "source", "description") or "description"
         if source not in grouped:
             grouped[source] = []
@@ -94,7 +101,8 @@ def get_project_vocabulary_by_source(project_id: int):
     return grouped
 
 @app.post("/projects/{project_id}/vocabulary/{word}/expand")
-def expand_vocabulary_word(project_id: int, word: str):
+def expand_vocabulary_word(project_id: int, word: str, request: Request):
+    get_user_id(request)
     item = expand_vocabulary_item(project_id, word)
 
     if not item:
@@ -106,7 +114,8 @@ def expand_vocabulary_word(project_id: int, word: str):
 
 # Add rebuild route directly after expand route
 @app.post("/projects/{project_id}/vocabulary/{word}/rebuild")
-def rebuild_vocabulary_word(project_id: int, word: str):
+def rebuild_vocabulary_word(project_id: int, word: str, request: Request):
+    get_user_id(request)
     item = rebuild_vocabulary_item(project_id, word)
 
     if not item:
@@ -116,15 +125,16 @@ def rebuild_vocabulary_word(project_id: int, word: str):
     return item
 
 @app.post("/projects/{project_id}/interview/start")
-def start_interview(project_id: int):
-    project = next((p for p in projects_db if p.id == project_id), None)
+def start_interview(project_id: int, request: Request):
+    user_id = get_user_id(request)
+    project = next((p for p in projects_db[user_id] if p.id == project_id), None)
 
     if not project:
         raise HTTPException(status_code=404, detail="Projekt nicht gefunden")
 
     user_name = project.user_name if project else "!"
 
-    interviews_db[project_id] = [
+    interviews_db[user_id][project_id] = [
         Message(
             role="assistant",
             text=f"Hi {user_name}, erzähl mir doch mal wie einem Freund in mehr als vier Sätzen, "
@@ -143,33 +153,35 @@ def start_interview(project_id: int):
 
     slots.context = "\n".join(initial_context_parts)
 
-    slots_db[project_id] = slots
-    vocabulary_db[project_id] = []
-    roleplay_db[project_id] = []
+    slots_db[user_id][project_id] = slots
+    vocabulary_db[user_id][project_id] = []
+    roleplay_db[user_id][project_id] = []
 
     extract_vocabulary_from_slots(project_id)
     save_data()
 
     return {
         "message": "Interview gestartet",
-        "interview": interviews_db[project_id]
+        "interview": interviews_db[user_id][project_id]
     }
 
 
 @app.get("/projects/{project_id}/interview")
-def get_interview(project_id: int):
-    if project_id not in interviews_db:
+def get_interview(project_id: int, request: Request):
+    user_id = get_user_id(request)
+    if project_id not in interviews_db[user_id]:
         raise HTTPException(status_code=404, detail="Interview nicht gefunden")
-    return interviews_db[project_id]
+    return interviews_db[user_id][project_id]
 
 
 @app.post("/projects/{project_id}/interview/message")
-def add_interview_message(project_id: int, new_message: NewMessage):
-    if project_id not in interviews_db:
+def add_interview_message(project_id: int, new_message: NewMessage, request: Request):
+    user_id = get_user_id(request)
+    if project_id not in interviews_db[user_id]:
         raise HTTPException(status_code=404, detail="Interview nicht gefunden")
 
     user_message = Message(role="user", text=new_message.text)
-    interviews_db[project_id].append(user_message)
+    interviews_db[user_id][project_id].append(user_message)
 
     update_slots(project_id, new_message.text)
 
@@ -180,27 +192,28 @@ def add_interview_message(project_id: int, new_message: NewMessage):
         role="assistant",
         text=get_next_question(project_id)
     )
-    interviews_db[project_id].append(assistant_message)
+    interviews_db[user_id][project_id].append(assistant_message)
     save_data()
 
     return {
         "message": "Nachricht gespeichert",
-        "interview": interviews_db[project_id],
-        "slots": slots_db[project_id],
-        "vocabulary": vocabulary_db[project_id]
+        "interview": interviews_db[user_id][project_id],
+        "slots": slots_db[user_id][project_id],
+        "vocabulary": vocabulary_db[user_id][project_id]
     }
 
 
 @app.post("/projects/{project_id}/roleplay/start")
-def start_roleplay(project_id: int):
-    project = next((p for p in projects_db if p.id == project_id), None)
+def start_roleplay(project_id: int, request: Request):
+    user_id = get_user_id(request)
+    project = next((p for p in projects_db[user_id] if p.id == project_id), None)
 
     if not project:
         raise HTTPException(status_code=404, detail="Projekt nicht gefunden")
 
-    vocabulary = vocabulary_db.get(project_id, [])
+    vocabulary = vocabulary_db[user_id].get(project_id, [])
 
-    slots = slots_db.get(project_id, ProjectSlots())
+    slots = slots_db[user_id].get(project_id, ProjectSlots())
 
     context_text = ""
     if slots.context:
@@ -216,7 +229,7 @@ def start_roleplay(project_id: int):
         vocabulary=vocabulary,
     )
 
-    roleplay_db[project_id] = [
+    roleplay_db[user_id][project_id] = [
         {"role": "system", "text": roleplay["scenario"]},
         {"role": "trainer", "text": roleplay["trainer_line"]},
     ]
@@ -224,26 +237,28 @@ def start_roleplay(project_id: int):
 
     return {
         "scenario": roleplay["scenario"],
-        "history": roleplay_db[project_id],
+        "history": roleplay_db[user_id][project_id],
     }
 
 @app.post("/projects/{project_id}/roleplay/message")
-def send_roleplay_message(project_id: int, new_message: NewMessage):
+def send_roleplay_message(project_id: int, new_message: NewMessage, request: Request):
 
-    project = next((p for p in projects_db if p.id == project_id), None)
+    user_id = get_user_id(request)
+
+    project = next((p for p in projects_db[user_id] if p.id == project_id), None)
 
     if not project:
         raise HTTPException(status_code=404, detail="Projekt nicht gefunden")
 
-    if project_id not in roleplay_db:
+    if project_id not in roleplay_db[user_id]:
         raise HTTPException(status_code=404, detail="Kein Rollenspiel gestartet")
 
-    vocabulary = vocabulary_db.get(project_id, [])
-    history = roleplay_db[project_id]
+    vocabulary = vocabulary_db[user_id].get(project_id, [])
+    history = roleplay_db[user_id][project_id]
 
     history.append({"role": "learner", "text": new_message.text})
 
-    slots = slots_db.get(project_id, ProjectSlots())
+    slots = slots_db[user_id].get(project_id, ProjectSlots())
 
     context_text = ""
     if slots.context:
@@ -262,7 +277,7 @@ def send_roleplay_message(project_id: int, new_message: NewMessage):
     )
 
     history.append({"role": "trainer", "text": trainer_reply})
-    roleplay_db[project_id] = history
+    roleplay_db[user_id][project_id] = history
     save_data()
 
     return {
@@ -272,13 +287,14 @@ def send_roleplay_message(project_id: int, new_message: NewMessage):
 
 # New route: Evaluate learning answer
 @app.post("/projects/{project_id}/learning/evaluate")
-def evaluate_learning_answer(project_id: int, payload: dict):
-    project = next((p for p in projects_db if p.id == project_id), None)
+def evaluate_learning_answer(project_id: int, payload: dict, request: Request):
+    user_id = get_user_id(request)
+    project = next((p for p in projects_db[user_id] if p.id == project_id), None)
 
     if not project:
         raise HTTPException(status_code=404, detail="Projekt nicht gefunden")
 
-    slots = slots_db.get(project_id, ProjectSlots())
+    slots = slots_db[user_id].get(project_id, ProjectSlots())
 
     context_parts = []
     if slots.context:

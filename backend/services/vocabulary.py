@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from base_core import BASE_CORE
 from models import VocabularyItem
-from database import slots_db, vocabulary_db, projects_db
+from database import DEFAULT_USER_ID, ensure_user, slots_db, vocabulary_db, projects_db
 from services.llm import (
     extract_vocabulary_llm,
     generate_situation_core,
@@ -81,26 +81,30 @@ def sort_vocabulary_items(items: List[VocabularyItem]) -> List[VocabularyItem]:
     return sorted(items, key=sort_key)
 
 
-def get_usable_vocab_count(project_id: int) -> int:
-    if project_id not in vocabulary_db:
+def get_usable_vocab_count(project_id: int, user_id: str = DEFAULT_USER_ID) -> int:
+    ensure_user(user_id)
+
+    if project_id not in vocabulary_db[user_id]:
         return 0
 
     return sum(
         1
-        for item in vocabulary_db[project_id]
+        for item in vocabulary_db[user_id][project_id]
         if item.translation and item.translation.strip()
     )
 
 
-def is_foundation_phase(project_id: int) -> bool:
-    return get_usable_vocab_count(project_id) < FOUNDATION_TARGET
+def is_foundation_phase(project_id: int, user_id: str = DEFAULT_USER_ID) -> bool:
+    return get_usable_vocab_count(project_id, user_id=user_id) < FOUNDATION_TARGET
 
 
-def expand_vocabulary_item(project_id: int, word: str) -> Optional[VocabularyItem]:
-    if project_id not in vocabulary_db:
+def expand_vocabulary_item(project_id: int, word: str, user_id: str = DEFAULT_USER_ID) -> Optional[VocabularyItem]:
+    ensure_user(user_id)
+
+    if project_id not in vocabulary_db[user_id]:
         return None
 
-    items = vocabulary_db[project_id]
+    items = vocabulary_db[user_id][project_id]
     target_item = next((item for item in items if normalize_lookup_key(item.word) == normalize_lookup_key(word)), None)
 
     if not target_item:
@@ -114,7 +118,7 @@ def expand_vocabulary_item(project_id: int, word: str) -> Optional[VocabularyIte
     ):
         return target_item
 
-    slots = slots_db.get(project_id)
+    slots = slots_db[user_id].get(project_id)
     if not slots:
         return target_item
 
@@ -130,9 +134,9 @@ def expand_vocabulary_item(project_id: int, word: str) -> Optional[VocabularyIte
             combined_text += "\n"
         combined_text += slots.followup_notes
 
-    foundation_phase = is_foundation_phase(project_id)
+    foundation_phase = is_foundation_phase(project_id, user_id=user_id)
 
-    project = next((p for p in projects_db if p.id == project_id), None)
+    project = next((p for p in projects_db[user_id] if p.id == project_id), None)
     target_language = project.target_language if project else "Spanisch"
     source_language = getattr(project, "source_language", None) if project else None
     if not source_language:
@@ -204,14 +208,16 @@ def expand_vocabulary_item(project_id: int, word: str) -> Optional[VocabularyIte
     return target_item
 
 
-def add_vocabulary_from_text(project_id: int, text: str) -> None:
-    if project_id not in vocabulary_db:
-        vocabulary_db[project_id] = []
+def add_vocabulary_from_text(project_id: int, text: str, user_id: str = DEFAULT_USER_ID) -> None:
+    ensure_user(user_id)
+
+    if project_id not in vocabulary_db[user_id]:
+        vocabulary_db[user_id][project_id] = []
 
     if not text.strip():
         return
 
-    existing_items = vocabulary_db[project_id]
+    existing_items = vocabulary_db[user_id][project_id]
     seen_words = {normalize_lookup_key(item.word) for item in existing_items}
 
     items = extract_vocabulary_llm(text)
@@ -231,7 +237,7 @@ def add_vocabulary_from_text(project_id: int, text: str) -> None:
             continue
 
         existing = next(
-            (existing_item for existing_item in vocabulary_db[project_id] if normalize_lookup_key(existing_item.word) == normalize_lookup_key(word)),
+            (existing_item for existing_item in vocabulary_db[user_id][project_id] if normalize_lookup_key(existing_item.word) == normalize_lookup_key(word)),
             None,
         )
         if existing:
@@ -248,22 +254,24 @@ def add_vocabulary_from_text(project_id: int, text: str) -> None:
             dialogue_line_2=None,
             expanded=False,
         )
-        vocabulary_db[project_id].append(new_item)
+        vocabulary_db[user_id][project_id].append(new_item)
         seen_words.add(normalize_lookup_key(word))
 
-    vocabulary_db[project_id] = sort_vocabulary_items(vocabulary_db[project_id])
+    vocabulary_db[user_id][project_id] = sort_vocabulary_items(vocabulary_db[user_id][project_id])
 
 
-def extract_vocabulary_from_slots(project_id: int) -> None:
-    if project_id not in slots_db:
+def extract_vocabulary_from_slots(project_id: int, user_id: str = DEFAULT_USER_ID) -> None:
+    ensure_user(user_id)
+
+    if project_id not in slots_db[user_id]:
         return
 
-    slots = slots_db[project_id]
+    slots = slots_db[user_id][project_id]
 
-    if project_id not in vocabulary_db:
-        vocabulary_db[project_id] = []
+    if project_id not in vocabulary_db[user_id]:
+        vocabulary_db[user_id][project_id] = []
 
-    seen_words = {normalize_lookup_key(item.word) for item in vocabulary_db[project_id]}
+    seen_words = {normalize_lookup_key(item.word) for item in vocabulary_db[user_id][project_id]}
 
     # 1. Grundwortschatz sicherstellen
     for raw_word in BASE_CORE:
@@ -273,7 +281,7 @@ def extract_vocabulary_from_slots(project_id: int) -> None:
             continue
 
         existing_base_item = next(
-            (item for item in vocabulary_db[project_id] if normalize_lookup_key(item.word) == normalize_lookup_key(word)),
+            (item for item in vocabulary_db[user_id][project_id] if normalize_lookup_key(item.word) == normalize_lookup_key(word)),
             None,
         )
 
@@ -291,7 +299,7 @@ def extract_vocabulary_from_slots(project_id: int) -> None:
             dialogue_line_2=None,
             expanded=False,
         )
-        vocabulary_db[project_id].append(new_base_item)
+        vocabulary_db[user_id][project_id].append(new_base_item)
         seen_words.add(normalize_lookup_key(word))
 
     # 2. Gesamten bekannten Kontexttext zusammensetzen
@@ -311,7 +319,7 @@ def extract_vocabulary_from_slots(project_id: int) -> None:
         combined_text += slots.followup_notes
 
     if not combined_text.strip():
-        vocabulary_db[project_id] = sort_vocabulary_items(vocabulary_db[project_id])
+        vocabulary_db[user_id][project_id] = sort_vocabulary_items(vocabulary_db[user_id][project_id])
         return
 
     latest_text = ""
@@ -325,12 +333,12 @@ def extract_vocabulary_from_slots(project_id: int) -> None:
 
     items = extract_vocabulary_llm(latest_text)
 
-    project = next((p for p in projects_db if p.id == project_id), None)
+    project = next((p for p in projects_db[user_id] if p.id == project_id), None)
     focus_topics = project.focus_topics if project and getattr(project, "focus_topics", None) else []
 
     situation_items = []
 
-    has_situation_core = any(item.source == "situation_core" for item in vocabulary_db[project_id])
+    has_situation_core = any(item.source == "situation_core" for item in vocabulary_db[user_id][project_id])
 
     # Generate the situation core only once.
     if not has_situation_core:
@@ -361,7 +369,7 @@ def extract_vocabulary_from_slots(project_id: int) -> None:
             continue
 
         existing = next(
-            (existing_item for existing_item in vocabulary_db[project_id] if normalize_lookup_key(existing_item.word) == normalize_lookup_key(word)),
+            (existing_item for existing_item in vocabulary_db[user_id][project_id] if normalize_lookup_key(existing_item.word) == normalize_lookup_key(word)),
             None,
         )
         if existing:
@@ -378,23 +386,25 @@ def extract_vocabulary_from_slots(project_id: int) -> None:
             dialogue_line_2=None,
             expanded=False,
         )
-        vocabulary_db[project_id].append(new_item)
+        vocabulary_db[user_id][project_id].append(new_item)
         seen_words.add(normalize_lookup_key(word))
 
-    vocabulary_db[project_id] = sort_vocabulary_items(vocabulary_db[project_id])
+    vocabulary_db[user_id][project_id] = sort_vocabulary_items(vocabulary_db[user_id][project_id])
 
 
 # Helper to reset and rebuild a vocabulary item
 from typing import Optional
 
-def rebuild_vocabulary_item(project_id: int, word: str) -> Optional[VocabularyItem]:
-    if project_id not in vocabulary_db:
+def rebuild_vocabulary_item(project_id: int, word: str, user_id: str = DEFAULT_USER_ID) -> Optional[VocabularyItem]:
+    ensure_user(user_id)
+
+    if project_id not in vocabulary_db[user_id]:
         return None
 
     target_item = next(
         (
             item
-            for item in vocabulary_db[project_id]
+            for item in vocabulary_db[user_id][project_id]
             if normalize_lookup_key(item.word) == normalize_lookup_key(word)
         ),
         None,
@@ -412,4 +422,4 @@ def rebuild_vocabulary_item(project_id: int, word: str) -> Optional[VocabularyIt
     target_item.sample_answer = None
     target_item.expanded = False
 
-    return expand_vocabulary_item(project_id, word)
+    return expand_vocabulary_item(project_id, word, user_id=user_id)

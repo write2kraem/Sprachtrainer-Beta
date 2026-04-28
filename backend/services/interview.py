@@ -1,15 +1,17 @@
 from models import ProjectSlots
-from database import interviews_db, slots_db, projects_db
+from database import DEFAULT_USER_ID, ensure_user, interviews_db, slots_db, projects_db
 from services.vocabulary import extract_vocabulary_from_slots, add_vocabulary_from_text
 from services.llm import generate_followup_question
 
 
-def get_project(project_id: int):
-    return next((p for p in projects_db if p.id == project_id), None)
+def get_project(project_id: int, user_id: str = DEFAULT_USER_ID):
+    ensure_user(user_id)
+    return next((p for p in projects_db[user_id] if p.id == project_id), None)
 
 
-def get_next_question(project_id: int) -> str:
-    messages = interviews_db[project_id]
+def get_next_question(project_id: int, user_id: str = DEFAULT_USER_ID) -> str:
+    ensure_user(user_id)
+    messages = interviews_db[user_id][project_id]
     user_messages = [msg for msg in messages if msg.role == "user"]
     user_count = len(user_messages)
 
@@ -25,7 +27,7 @@ def get_next_question(project_id: int) -> str:
         )
 
     else:
-        slots = slots_db.get(project_id, ProjectSlots())
+        slots = slots_db[user_id].get(project_id, ProjectSlots())
 
         context = slots.context or ""
         description = slots.description or ""
@@ -38,24 +40,26 @@ def get_next_question(project_id: int) -> str:
         )
 
 
-def update_slots(project_id: int, user_text: str) -> None:
-    if project_id not in slots_db:
-        slots_db[project_id] = ProjectSlots()
+def update_slots(project_id: int, user_text: str, user_id: str = DEFAULT_USER_ID) -> None:
+    ensure_user(user_id)
 
-    slots = slots_db[project_id]
-    messages = interviews_db[project_id]
+    if project_id not in slots_db[user_id]:
+        slots_db[user_id][project_id] = ProjectSlots()
+
+    slots = slots_db[user_id][project_id]
+    messages = interviews_db[user_id][project_id]
     user_messages = [msg for msg in messages if msg.role == "user"]
     user_count = len(user_messages)
 
     if user_count == 1:
         # erste offene Erzählung
         slots.context = user_text
-        add_vocabulary_from_text(project_id, user_text)
+        add_vocabulary_from_text(project_id, user_text, user_id=user_id)
 
     elif user_count == 2:
         # zweite offene Vertiefung
         slots.description = user_text
-        extract_vocabulary_from_slots(project_id)
+        extract_vocabulary_from_slots(project_id, user_id=user_id)
 
     else:
         existing_notes = slots.followup_notes or ""
@@ -64,6 +68,6 @@ def update_slots(project_id: int, user_text: str) -> None:
         else:
             slots.followup_notes = user_text
 
-        add_vocabulary_from_text(project_id, user_text)
+        add_vocabulary_from_text(project_id, user_text, user_id=user_id)
 
-    slots_db[project_id] = slots
+    slots_db[user_id][project_id] = slots
