@@ -1,6 +1,6 @@
 "use client";
 
-import { apiUrl } from "@/lib/api";
+import { apiUrl, getUserId } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -21,9 +21,21 @@ export default function HomePage() {
   const [focusTopicsInput, setFocusTopicsInput] = useState("");
   const router = useRouter();
 
+  function userHeaders() {
+    const headers = {
+      "Content-Type": "application/json",
+      "X-User-Id": getUserId(),
+    };
+
+  
+    return headers;
+  }
+
   async function loadProjects() {
     try {
-      const response = await fetch(apiUrl("/projects"));
+      const response = await fetch(apiUrl("/projects"), {
+        headers: userHeaders(),
+      });
       const data: Project[] = await response.json();
       setProjects(data);
     } catch (err) {
@@ -65,9 +77,7 @@ export default function HomePage() {
     try {
       const response = await fetch(apiUrl("/projects"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: userHeaders(),
         body: JSON.stringify(newProject),
       });
 
@@ -79,6 +89,7 @@ export default function HomePage() {
         apiUrl(`/projects/${newProject.id}/interview/start`),
         {
           method: "POST",
+          headers: userHeaders(),
         }
       ).catch(() => {
         // Fallback: the project page can try to initialize the interview if needed.

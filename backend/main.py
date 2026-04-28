@@ -102,8 +102,8 @@ def get_project_vocabulary_by_source(project_id: int, request: Request):
 
 @app.post("/projects/{project_id}/vocabulary/{word}/expand")
 def expand_vocabulary_word(project_id: int, word: str, request: Request):
-    get_user_id(request)
-    item = expand_vocabulary_item(project_id, word)
+    user_id = get_user_id(request)
+    item = expand_vocabulary_item(project_id, word, user_id=user_id)
 
     if not item:
         raise HTTPException(status_code=404, detail="Wort nicht gefunden")
@@ -115,8 +115,8 @@ def expand_vocabulary_word(project_id: int, word: str, request: Request):
 # Add rebuild route directly after expand route
 @app.post("/projects/{project_id}/vocabulary/{word}/rebuild")
 def rebuild_vocabulary_word(project_id: int, word: str, request: Request):
-    get_user_id(request)
-    item = rebuild_vocabulary_item(project_id, word)
+    user_id = get_user_id(request)
+    item = rebuild_vocabulary_item(project_id, word, user_id=user_id)
 
     if not item:
         raise HTTPException(status_code=404, detail="Wort nicht gefunden")
@@ -157,7 +157,7 @@ def start_interview(project_id: int, request: Request):
     vocabulary_db[user_id][project_id] = []
     roleplay_db[user_id][project_id] = []
 
-    extract_vocabulary_from_slots(project_id)
+    extract_vocabulary_from_slots(project_id, user_id=user_id)
     save_data()
 
     return {
@@ -183,14 +183,14 @@ def add_interview_message(project_id: int, new_message: NewMessage, request: Req
     user_message = Message(role="user", text=new_message.text)
     interviews_db[user_id][project_id].append(user_message)
 
-    update_slots(project_id, new_message.text)
+    update_slots(project_id, new_message.text, user_id=user_id)
 
     # Wortschatz nach jeder neuen Interview-Antwort aktualisieren
-    extract_vocabulary_from_slots(project_id)
+    extract_vocabulary_from_slots(project_id, user_id=user_id)
 
     assistant_message = Message(
         role="assistant",
-        text=get_next_question(project_id)
+        text=get_next_question(project_id, user_id=user_id)
     )
     interviews_db[user_id][project_id].append(assistant_message)
     save_data()
