@@ -6,6 +6,7 @@ class Project(BaseModel):
     id: int
     title: str
     target_language: str
+    level: Optional[str] = None
     user_name: str
     focus_topics: list[str] = []
 

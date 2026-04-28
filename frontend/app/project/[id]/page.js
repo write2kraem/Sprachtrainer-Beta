@@ -27,6 +27,7 @@ export default function ProjectPage({ params }) {
   const [showRoleplaySection, setShowRoleplaySection] = useState(false);
   const [showInterviewSection, setShowInterviewSection] = useState(true);
   const [selectedLevel, setSelectedLevel] = useState("beginner");
+  const [projectRawLevel, setProjectRawLevel] = useState("");
   const [masteredWords, setMasteredWords] = useState({});
   const [learningAnswer, setLearningAnswer] = useState("");
   const [learningFeedback, setLearningFeedback] = useState(null);
@@ -48,7 +49,18 @@ export default function ProjectPage({ params }) {
   const activeSpeechFieldRef = useRef("interview");
   const learningDirectionRef = useRef("target-first");
   const sourceLanguageRef = useRef("Deutsch");
+
   const targetLanguageRef = useRef("Fremdsprache");
+
+function mapProjectLevelToAccessLevel(level) {
+  const normalizedLevel = String(level || "").trim().toLowerCase();
+
+  if (normalizedLevel === "grundkenntnisse") return "some";
+  if (normalizedLevel === "fortgeschritten") return "advanced";
+  if (normalizedLevel === "fließend" || normalizedLevel === "fliessend") return "advanced";
+
+  return "beginner";
+}
 
 async function loadProjectLanguages() {
   try {
@@ -73,6 +85,25 @@ async function loadProjectLanguages() {
     if (currentProject.source_language) {
       setSourceLanguage(currentProject.source_language);
     }
+
+    const storedProjectLevel =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(`trainer-project-level-${projectId}`)
+        : null;
+
+    const rawLevel = currentProject.level || storedProjectLevel || "";
+    const mappedLevel = mapProjectLevelToAccessLevel(rawLevel);
+
+    console.log("Project access level", {
+      projectId,
+      rawLevel,
+      mappedLevel,
+      backendLevel: currentProject.level,
+      storedProjectLevel,
+    });
+
+    setProjectRawLevel(rawLevel);
+    setSelectedLevel(mappedLevel);
   } catch (err) {
     // Fallback bleibt bei Deutsch / Fremdsprache
   }
@@ -319,11 +350,6 @@ useEffect(() => {
   if (typeof window === "undefined") return;
 
   try {
-    const storedLevel = window.localStorage.getItem(`trainer-level-${projectId}`);
-    if (storedLevel === "beginner" || storedLevel === "some" || storedLevel === "advanced") {
-      setSelectedLevel(storedLevel);
-    }
-
     const storedMasteredWords = window.localStorage.getItem(`trainer-mastered-${projectId}`);
     if (storedMasteredWords) {
       const parsed = JSON.parse(storedMasteredWords);
@@ -336,12 +362,6 @@ useEffect(() => {
   }
 }, [projectId]);
 
-useEffect(() => {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(`trainer-level-${projectId}`, selectedLevel);
-  } catch (err) {}
-}, [projectId, selectedLevel]);
 
 useEffect(() => {
   if (typeof window === "undefined") return;
@@ -921,13 +941,19 @@ async function submitLearningAnswer() {
     const coreCount = Array.isArray(vocabulary) ? vocabulary.length : 0;
     const masteredCount = Object.keys(masteredWords).length;
 
-    const learningUnlocked =
-      selectedLevel === "some" ||
-      selectedLevel === "advanced" ||
-      coreCount >= learningTarget;
+    const effectiveLevel = projectRawLevel || "Anfänger";
+    const isBasicOrHigher =
+      effectiveLevel === "Grundkenntnisse" ||
+      effectiveLevel === "Fortgeschritten" ||
+      effectiveLevel === "Fließend";
+    const isAdvancedOrHigher =
+      effectiveLevel === "Fortgeschritten" ||
+      effectiveLevel === "Fließend";
+
+    const learningUnlocked = isBasicOrHigher || coreCount >= learningTarget;
 
     const roleplayUnlocked =
-      selectedLevel === "advanced" ||
+      isAdvancedOrHigher ||
       (learningUnlocked && masteredCount >= roleplayTarget);
 
     const progressPercent = Math.min(100, Math.round((coreCount / coreTarget) * 100));
@@ -1208,9 +1234,6 @@ async function submitLearningAnswer() {
         Sprachtrainer
       </h1>
 
-      <p style={{ marginBottom: 20, color: "#555" }}>
-        Projekt-ID: {projectId}
-      </p>
 
       {status && (
         <p style={{ marginBottom: 20, color: "#0a7" }}>
@@ -1218,58 +1241,6 @@ async function submitLearningAnswer() {
         </p>
       )}
 
-      {/* Startniveau selection block moved here */}
-      <div
-        style={{
-          ...sectionStyle,
-          marginBottom: 24,
-          marginTop: 0,
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Startniveau</div>
-        <p style={{ marginTop: 0, marginBottom: 16, color: "#555", lineHeight: 1.6 }}>
-          Damit steuern wir die Freischaltung: Anfänger starten nur mit dem Interview, bei
-          „Verstehe etwas“ ist der Lernmodus sofort offen, und bei „Fortgeschritten“ sind
-          Lernmodus und Rollenspiel direkt verfügbar.
-        </p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            onClick={() => setSelectedLevel("beginner")}
-            style={{
-              ...secondaryButtonStyle,
-              background: selectedLevel === "beginner" ? "#eef4ff" : "#ffffff",
-              border: selectedLevel === "beginner" ? "1px solid #4f8cff" : secondaryButtonStyle.border,
-              color: selectedLevel === "beginner" ? "#245fd1" : secondaryButtonStyle.color,
-            }}
-          >
-            Anfänger
-          </button>
-
-          <button
-            onClick={() => setSelectedLevel("some")}
-            style={{
-              ...secondaryButtonStyle,
-              background: selectedLevel === "some" ? "#eef4ff" : "#ffffff",
-              border: selectedLevel === "some" ? "1px solid #4f8cff" : secondaryButtonStyle.border,
-              color: selectedLevel === "some" ? "#245fd1" : secondaryButtonStyle.color,
-            }}
-          >
-            Verstehe etwas
-          </button>
-
-          <button
-            onClick={() => setSelectedLevel("advanced")}
-            style={{
-              ...secondaryButtonStyle,
-              background: selectedLevel === "advanced" ? "#eef4ff" : "#ffffff",
-              border: selectedLevel === "advanced" ? "1px solid #4f8cff" : secondaryButtonStyle.border,
-              color: selectedLevel === "advanced" ? "#245fd1" : secondaryButtonStyle.color,
-            }}
-          >
-            Fortgeschritten
-          </button>
-        </div>
-      </div>
 
       <section
         style={{ ...sectionStyle, marginBottom: 24 }}
@@ -2022,6 +1993,7 @@ async function submitLearningAnswer() {
 
 
           <div style={{ marginTop: 18, display: "grid", gap: 8, color: "#555" }}>
+            <div>Startniveau: {effectiveLevel}</div>
             <div>Beherrschte Vokabeln im Lernmodus: {masteredCount} / {roleplayTarget}</div>
             <div>
               Lernmodus: {learningUnlocked ? "freigeschaltet" : `gesperrt bis ${learningTarget} Wörter`}
