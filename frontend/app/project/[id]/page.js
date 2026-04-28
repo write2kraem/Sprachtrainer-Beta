@@ -28,6 +28,11 @@ export default function ProjectPage({ params }) {
   const [showInterviewSection, setShowInterviewSection] = useState(true);
   const [selectedLevel, setSelectedLevel] = useState("beginner");
   const [projectRawLevel, setProjectRawLevel] = useState("");
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState("");
+  const [feedbackProblem, setFeedbackProblem] = useState("");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackStatus, setFeedbackStatus] = useState("");
   const [masteredWords, setMasteredWords] = useState({});
   const [learningAnswer, setLearningAnswer] = useState("");
   const [learningFeedback, setLearningFeedback] = useState(null);
@@ -94,13 +99,6 @@ async function loadProjectLanguages() {
     const rawLevel = currentProject.level || storedProjectLevel || "";
     const mappedLevel = mapProjectLevelToAccessLevel(rawLevel);
 
-    console.log("Project access level", {
-      projectId,
-      rawLevel,
-      mappedLevel,
-      backendLevel: currentProject.level,
-      storedProjectLevel,
-    });
 
     setProjectRawLevel(rawLevel);
     setSelectedLevel(mappedLevel);
@@ -935,6 +933,45 @@ async function submitLearningAnswer() {
       setShowRoleplaySection(nextRoleplay);
       setShowVocabulary(nextVocabulary);
     }
+
+    function submitFeedback() {
+      if (!feedbackRating || !feedbackProblem) {
+        setFeedbackStatus("Bitte Bewertung und Hauptproblem auswählen.");
+        return;
+      }
+
+      const feedbackEntry = {
+        projectId,
+        createdAt: new Date().toISOString(),
+        rating: Number(feedbackRating),
+        problem: feedbackProblem,
+        comment: feedbackText.trim(),
+        targetLanguage,
+        projectLevel: projectRawLevel || "Anfänger",
+        vocabularyCount: coreCount,
+        masteredCount,
+      };
+
+      try {
+        const storageKey = "sprachtrainer_feedback";
+        const existingFeedback = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify([...existingFeedback, feedbackEntry])
+        );
+
+        setFeedbackStatus("Danke – dein Feedback wurde gespeichert.");
+        setFeedbackRating("");
+        setFeedbackProblem("");
+        setFeedbackText("");
+        setTimeout(() => {
+          setShowFeedbackForm(false);
+          setFeedbackStatus("");
+        }, 1200);
+      } catch (err) {
+        setFeedbackStatus("Feedback konnte nicht gespeichert werden.");
+      }
+    }
     const coreTarget = 200;
     const learningTarget = 100;
     const roleplayTarget = 30;
@@ -1231,7 +1268,7 @@ async function submitLearningAnswer() {
       </a>
 
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 8 }}>
-        Sprachtrainer
+        Sprachtrainer XX
       </h1>
 
 
@@ -2152,6 +2189,119 @@ async function submitLearningAnswer() {
             )}
             </>
         )}
+        </section>
+
+        <section style={{ ...sectionStyle, marginBottom: 24 }}>
+          <button
+            onClick={() => setShowFeedbackForm((prev) => !prev)}
+            style={accordionHeaderStyle}
+          >
+            <h2 style={{ fontSize: 24, fontWeight: "bold", margin: 0 }}>
+              Feedback
+            </h2>
+            <span style={{ fontSize: 24, color: "#4f8cff" }}>
+              {getSectionArrow(showFeedbackForm)}
+            </span>
+          </button>
+
+          {!showFeedbackForm ? (
+            <p style={{ margin: 0, color: "#555", lineHeight: 1.6 }}>
+              Hilf uns, den Sprachtrainer schneller besser zu machen.
+            </p>
+          ) : (
+            <div style={{ display: "grid", gap: 14 }}>
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                  Wie hilfreich war diese Session?
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button
+                      key={rating}
+                      type="button"
+                      onClick={() => setFeedbackRating(String(rating))}
+                      style={{
+                        ...secondaryButtonStyle,
+                        background: feedbackRating === String(rating) ? "#eef4ff" : "#ffffff",
+                        border: feedbackRating === String(rating) ? "1px solid #4f8cff" : secondaryButtonStyle.border,
+                        color: feedbackRating === String(rating) ? "#245fd1" : secondaryButtonStyle.color,
+                      }}
+                    >
+                      {rating} ★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                  Was war das Hauptproblem?
+                </div>
+                <select
+                  value={feedbackProblem}
+                  onChange={(e) => setFeedbackProblem(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #d7deea",
+                    background: "#ffffff",
+                  }}
+                >
+                  <option value="">Bitte auswählen</option>
+                  <option value="flow_unclear">Ich wusste nicht, was ich tun soll</option>
+                  <option value="too_hard">Zu schwer</option>
+                  <option value="too_easy">Zu leicht</option>
+                  <option value="wrong_vocabulary">Vokabeln oder Übersetzungen waren falsch</option>
+                  <option value="questions_unclear">Fragen waren unklar oder unpassend</option>
+                  <option value="speech_issue">Spracheingabe oder Audio hat nicht funktioniert</option>
+                  <option value="other">Etwas anderes</option>
+                </select>
+              </div>
+
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                  Was sollte als Nächstes besser werden?
+                </div>
+                <textarea
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="Optional: kurze Beschreibung"
+                  rows={4}
+                  style={{
+                    width: "100%",
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #d7deea",
+                    resize: "vertical",
+                    font: "inherit",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {feedbackStatus && (
+                <p style={{ margin: 0, color: feedbackStatus.startsWith("Danke") ? "#0a7" : "#a33a3a" }}>
+                  {feedbackStatus}
+                </p>
+              )}
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button onClick={submitFeedback} style={primaryButtonStyle}>
+                  Feedback absenden
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFeedbackForm(false);
+                    setFeedbackStatus("");
+                  }}
+                  style={secondaryButtonStyle}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          )}
         </section>
     </main>
   );
