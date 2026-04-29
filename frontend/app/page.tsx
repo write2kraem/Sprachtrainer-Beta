@@ -94,7 +94,6 @@ export default function HomePage() {
   function selectExistingLanguage(languageName: string) {
     setSelectedLanguage(languageName);
     setTargetLanguage(languageName);
-    setNewLanguageName(languageName);
     const projectWithLevel = projects.find((project) => project.target_language === languageName && project.level);
     setLevel(projectWithLevel?.level || "");
     setError("");
@@ -173,6 +172,14 @@ export default function HomePage() {
     setCurrentUserId(normalizedEmail);
     setCurrentUserEmail(normalizedEmail);
     setCurrentUserName(normalizedName);
+    setProjects([]);
+    setSelectedLanguage("");
+    setNewLanguageName("");
+    setTargetLanguage("");
+    setLevel("");
+    setTitle("");
+    setFocusTopicsInput("");
+    setError("");
   }
 
   function logoutUser() {
@@ -185,6 +192,12 @@ export default function HomePage() {
     setEmailInput("");
     setNameInput("");
     setProjects([]);
+    setSelectedLanguage("");
+    setNewLanguageName("");
+    setTargetLanguage("");
+    setLevel("");
+    setTitle("");
+    setFocusTopicsInput("");
     setError("");
     setIdentityError("");
   }
@@ -437,7 +450,7 @@ export default function HomePage() {
 
         <div style={{ display: "grid", gap: 12 }}>
           <p style={{ margin: 0, color: "#666", fontSize: 14 }}>
-            Neue Sprache anlegen:
+            Neue Sprache anlegen oder bestehende oben auswählen:
           </p>
 
           <input
@@ -451,12 +464,7 @@ export default function HomePage() {
               boxSizing: "border-box",
             }}
             placeholder="Sprache, z. B. Spanisch"
-            value={newLanguageName || selectedLanguage}
-            onFocus={() => {
-              if (selectedLanguage && !newLanguageName) {
-                setNewLanguageName(selectedLanguage);
-              }
-            }}
+            value={newLanguageName}
             onChange={(e) => {
               setNewLanguageName(e.target.value);
               setSelectedLanguage("");

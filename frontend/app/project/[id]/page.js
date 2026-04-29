@@ -934,7 +934,7 @@ async function submitLearningAnswer() {
       setShowVocabulary(nextVocabulary);
     }
 
-    function submitFeedback() {
+    async function submitFeedback() {
       if (!feedbackRating || !feedbackProblem) {
         setFeedbackStatus("Bitte Bewertung und Hauptproblem auswählen.");
         return;
@@ -953,12 +953,24 @@ async function submitLearningAnswer() {
       };
 
       try {
+        setFeedbackStatus("Feedback wird ans Backend gesendet...");
         const storageKey = "sprachtrainer_feedback";
         const existingFeedback = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
         window.localStorage.setItem(
           storageKey,
           JSON.stringify([...existingFeedback, feedbackEntry])
         );
+
+        console.log("Submitting feedback to backend", apiUrl("/feedback"), feedbackEntry);
+        const feedbackResponse = await fetch(apiUrl("/feedback"), {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify(feedbackEntry),
+        });
+
+        if (!feedbackResponse.ok) {
+          throw new Error("Backend feedback request failed");
+        }
 
         setFeedbackStatus("Danke – dein Feedback wurde gespeichert.");
         setFeedbackRating("");
@@ -969,7 +981,7 @@ async function submitLearningAnswer() {
           setFeedbackStatus("");
         }, 1200);
       } catch (err) {
-        setFeedbackStatus("Feedback konnte nicht gespeichert werden.");
+        setFeedbackStatus("Feedback wurde lokal gespeichert, konnte aber nicht ans Backend gesendet werden.");
       }
     }
     const coreTarget = 200;
@@ -1268,7 +1280,7 @@ async function submitLearningAnswer() {
       </a>
 
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 8 }}>
-        Sprachtrainer XX
+        Sprachtrainer
       </h1>
 
 

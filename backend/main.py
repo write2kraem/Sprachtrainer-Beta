@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from models import Project, Message, NewMessage, ProjectSlots
@@ -27,6 +30,55 @@ def get_user_id(request: Request) -> str:
     user_id = user_id.strip() if user_id else DEFAULT_USER_ID
     ensure_user(user_id)
     return user_id
+
+
+FEEDBACK_DIR = Path(__file__).resolve().parent / "data"
+FEEDBACK_FILE = FEEDBACK_DIR / "feedback.json"
+
+
+def load_feedback_entries() -> list[dict[str, Any]]:
+    if not FEEDBACK_FILE.exists():
+        return []
+
+    with FEEDBACK_FILE.open("r", encoding="utf-8") as file:
+        raw_entries = json.load(file)
+
+    if not isinstance(raw_entries, list):
+        return []
+
+    return raw_entries
+
+
+def save_feedback_entries(entries: list[dict[str, Any]]) -> None:
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+    with FEEDBACK_FILE.open("w", encoding="utf-8") as file:
+        json.dump(entries, file, ensure_ascii=False, indent=2)
+
+
+
+@app.post("/feedback")
+def submit_feedback(payload: dict[str, Any], request: Request):
+    user_id = get_user_id(request)
+    entries = load_feedback_entries()
+
+    entry = {
+        "user_id": user_id,
+        **payload,
+    }
+
+    entries.append(entry)
+    save_feedback_entries(entries)
+
+    return {
+        "message": "Feedback gespeichert",
+        "count": len(entries),
+    }
+
+
+@app.get("/feedback")
+def get_feedback(request: Request):
+    get_user_id(request)
+    return load_feedback_entries()
 
 @app.get("/projects")
 def get_projects(request: Request):
