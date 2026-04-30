@@ -1075,14 +1075,6 @@ async function submitLearningAnswer() {
     const rawWord = String(item.word || "").trim();
     if (!rawWord) return "";
 
-    if ((sourceLanguage || "").trim().toLowerCase() === "deutsch" && item.category === "noun") {
-      const capitalized = rawWord.charAt(0).toUpperCase() + rawWord.slice(1);
-      if (item.article) {
-        return `${item.article} ${capitalized}`;
-      }
-      return capitalized;
-    }
-
     return rawWord;
   }
 
@@ -1265,6 +1257,48 @@ async function submitLearningAnswer() {
       el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
     }, [input]);
 
+  // --- Review status helpers ---
+  function getReviewStatusLabel(status) {
+    if (status === "approved") return "geprüft";
+    if (status === "edited") return "korrigiert";
+    if (status === "rejected") return "verworfen";
+    return "neu";
+  }
+
+  function getReviewBadgeStyle(status) {
+    const base = {
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "4px 8px",
+      borderRadius: 999,
+      fontSize: 12,
+      fontWeight: 600,
+      border: "1px solid #d7deea",
+    };
+
+    if (status === "approved") {
+      return { ...base, background: "#edf9f1", color: "#1f7a3d", border: "1px solid #b9e6c7" };
+    }
+
+    if (status === "edited") {
+      return { ...base, background: "#fff7e8", color: "#8a5a00", border: "1px solid #ffd98a" };
+    }
+
+    if (status === "rejected") {
+      return { ...base, background: "#fff1f1", color: "#a33a3a", border: "1px solid #f0b6b6" };
+    }
+
+    return { ...base, background: "#eef4ff", color: "#245fd1", border: "1px solid #c8dafd" };
+  }
+
+  function markVocabularyItemReviewed(word, reviewStatus = "approved") {
+    setVocabulary((prev) =>
+      prev.map((item) =>
+        item.word === word ? { ...item, review_status: reviewStatus } : item
+      )
+    );
+  }
+
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: 32, background: "#fafafa", minHeight: "100vh" }}>
       <a
@@ -1280,7 +1314,7 @@ async function submitLearningAnswer() {
       </a>
 
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 8 }}>
-        Sprachtrainer
+        Sprachtrainer xxL
       </h1>
 
 
@@ -1516,6 +1550,10 @@ async function submitLearningAnswer() {
                           : getSourceText(currentWord)}
                       </div>
 
+                      <span style={getReviewBadgeStyle(currentWord.review_status)}>
+                        {getReviewStatusLabel(currentWord.review_status)}
+                      </span>
+
                       {learningDirection === "target-first" && (
                         <button
                           onClick={() => speakText(getTargetText(currentWord))}
@@ -1641,6 +1679,12 @@ async function submitLearningAnswer() {
                             Nächstes Wort
                           </button>
                           <button
+                            onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
+                            style={secondaryButtonStyle}
+                          >
+                            ✅ Karte passt
+                          </button>
+                          <button
                             onClick={() => setShowTranslation((prev) => !prev)}
                             style={secondaryButtonStyle}
                           >
@@ -1735,6 +1779,12 @@ async function submitLearningAnswer() {
                             style={primaryButtonStyle}
                           >
                             Nächstes Wort
+                          </button>
+                          <button
+                            onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
+                            style={secondaryButtonStyle}
+                          >
+                            ✅ Karte passt
                           </button>
                           <button
                             onClick={() => setShowTranslation((prev) => !prev)}
@@ -2101,6 +2151,10 @@ async function submitLearningAnswer() {
                             : getSourceText(item)}
                         </div>
 
+                        <span style={getReviewBadgeStyle(item.review_status)}>
+                          {getReviewStatusLabel(item.review_status)}
+                        </span>
+
                         {learningDirection === "target-first" && (
                           <button
                             onClick={() => speakText(getTargetText(item))}
@@ -2169,6 +2223,20 @@ async function submitLearningAnswer() {
                             ? "Aus Kontext ergänzt"
                             : "Aus deinem Interview"
                         }
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => markVocabularyItemReviewed(item.word, "approved")}
+                        style={secondaryButtonStyle}
+                      >
+                        ✅ Karte passt
+                      </button>
+                      <button
+                        onClick={() => markVocabularyItemReviewed(item.word, "edited")}
+                        style={secondaryButtonStyle}
+                      >
+                        ✏️ Korrektur nötig
+                      </button>
                     </div>
  
 
