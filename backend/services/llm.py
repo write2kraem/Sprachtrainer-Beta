@@ -36,6 +36,11 @@ für einen Sprachlernenden.
 Regeln:
 - extrahiere möglichst vollständig
 - nimm relevante Verben, Nomen, Adjektive und kurze Phrasen
+- deutsche Nomen müssen immer mit bestimmtem Artikel ausgegeben werden: der, die oder das
+- deutsche Nomen müssen immer großgeschrieben werden
+- Beispiel: nicht "frühstück", sondern "das Frühstück"
+- Beispiel: nicht "welle", sondern "die Welle"
+- Beispiel: nicht "surfkurs", sondern "der Surfkurs"
 - entferne Dubletten
 - keine Artikel allein
 - keine Pronomen allein
@@ -43,6 +48,7 @@ Regeln:
 - einzelne Funktionswörter wie "mit", "unter", "über" nicht allein ausgeben
 - solche Wörter nur dann ausgeben, wenn sie Teil einer sinnvollen Phrase sind
 - bevorzuge Grundform oder sinnvolle Basisform
+- bei Nomen ist die Basisform immer mit Artikel und korrekter Großschreibung
 - kategorisiere jeden Eintrag als:
   - verb
   - noun
@@ -62,8 +68,8 @@ Beispiele für gute Phrasen:
 Antworte nur als JSON-Liste in diesem Format:
 [
   {{"word": "ankern", "category": "verb"}},
-  {{"word": "hafenmeister", "category": "noun"}},
-  {{"word": "mit der welle", "category": "phrase"}}
+  {{"word": "der Hafenmeister", "category": "noun"}},
+  {{"word": "mit der Welle", "category": "phrase"}}
 ]
 
 Text:
@@ -84,6 +90,107 @@ Text:
         return []
 
 
+
+
+# New function: validate_vocabulary_batch
+def validate_vocabulary_batch(items: list[dict], context: str = "") -> list[dict]:
+    if not items:
+        return []
+
+    compact_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        word = str(item.get("word", "")).strip()
+        category = str(item.get("category", "other")).strip().lower()
+        if not word:
+            continue
+        if category not in {"noun", "verb", "phrase", "other"}:
+            category = "other"
+        compact_items.append({"word": word, "category": category})
+
+    if not compact_items:
+        return []
+
+    prompt = f"""
+Du validierst eine deutsche Vokabelliste für Karteikarten.
+
+Kontext:
+{context}
+
+Aufgabe:
+Korrigiere die Einträge sprachlich, bevor sie gespeichert werden.
+
+Harte Regeln:
+- Antworte nur als JSON-Liste.
+- Jeder Eintrag muss exakt die Felder "word" und "category" haben.
+- Erhalte die Reihenfolge möglichst bei.
+- Entferne keine sinnvollen Einträge.
+- category darf nur sein: noun, verb, phrase oder other.
+- Deutsche Nomen müssen immer als Singular-Grundform mit bestimmtem Artikel ausgegeben werden: der, die oder das.
+- Deutsche Nomen müssen großgeschrieben werden; der Artikel bleibt klein.
+- Wenn ein einzelnes deutsches Wort ein Ding, Ort, Person, Konzept oder Gegenstand ist, setze category auf "noun".
+- Wenn ein Eintrag ein Verb ist, setze category auf "verb" und verwende die Infinitivform ohne Artikel.
+- Wenn ein Eintrag eine kurze sinnvolle Wendung ist, setze category auf "phrase".
+- Ganze Sätze sind keine Vokabeln. Reduziere Sätze auf das zentrale Wort oder die zentrale kurze Phrase.
+- Beispiel: "ich brauche Werkzeug" -> {{"word": "das Werkzeug", "category": "noun"}}
+- Verwende bei Nomen grundsätzlich Singular, außer der Ausdruck ist eindeutig nur im Plural sinnvoll.
+- Beispiel: "antworten" oder "respuestas" als Nomen -> {{"word": "die Antwort", "category": "noun"}}
+- Vermeide substantivierte Verbformen, wenn ein normales Nomen gemeint ist.
+- Beispiel: nicht {{"word": "das Tanzen", "category": "noun"}}, sondern {{"word": "der Tanz", "category": "noun"}}
+- Beispiel: nicht {{"word": "das Beobachten", "category": "noun"}}, sondern {{"word": "die Beobachtung", "category": "noun"}}
+- Länder, Inseln, Städte und Eigennamen bekommen normalerweise keinen Artikel.
+- Beispiel: "Spanien" -> {{"word": "Spanien", "category": "noun"}}
+- Beispiel: nicht {{"word": "das Spanien", "category": "noun"}}
+- Beispiel: "antwort" -> {{"word": "die Antwort", "category": "noun"}}
+- Beispiel: "auto" -> {{"word": "das Auto", "category": "noun"}}
+- Beispiel: "bus" -> {{"word": "der Bus", "category": "noun"}}
+- Beispiel: "frühstück" -> {{"word": "das Frühstück", "category": "noun"}}
+- Beispiel: "baile" oder "tanzen" im Sinne eines Nomens -> {{"word": "der Tanz", "category": "noun"}}
+- Beispiel: "observación" oder "beobachten" im Sinne eines Nomens -> {{"word": "die Beobachtung", "category": "noun"}}
+- Beispiel: "surfen" als Tätigkeit -> {{"word": "surfen", "category": "verb"}}
+
+Eingabe:
+{json.dumps(compact_items, ensure_ascii=False)}
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.1,
+    )
+
+    result = (response.choices[0].message.content or "[]").strip()
+
+    if result.startswith("```"):
+        result = result.strip("`")
+        if result.startswith("json"):
+            result = result[4:].strip()
+
+    try:
+        parsed = json.loads(result)
+    except json.JSONDecodeError:
+        print("VOCAB VALIDATION RAW:", result)
+        return compact_items
+
+    if not isinstance(parsed, list):
+        return compact_items
+
+    validated = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        word = str(item.get("word", "")).strip()
+        category = str(item.get("category", "other")).strip().lower()
+        if not word:
+            continue
+        if category not in {"noun", "verb", "phrase", "other"}:
+            category = "other"
+        validated.append({"word": word, "category": category})
+
+    return validated or compact_items
+
+
 def generate_situation_core(
     context: str,
     description: str,
@@ -101,6 +208,10 @@ def generate_situation_core(
         "- ergänze möglichst 15 bis 20 wichtige Wörter oder kurze Phrasen\n"
         "- sei lieber etwas vollständiger als zu sparsam\n"
         "- nimm die wichtigsten Objekte, Handlungen, Personen, Fragen und kurzen Alltagsphrasen der Situation auf\n"
+        "- deutsche Nomen müssen immer mit bestimmtem Artikel ausgegeben werden: der, die oder das\n"
+        "- deutsche Nomen müssen immer großgeschrieben werden\n"
+        "- Beispiel: nicht 'frühstück', sondern 'das Frühstück'\n"
+        "- Beispiel: nicht 'welle', sondern 'die Welle'\n"
         "- nur Dinge, die in dieser Situation sehr wahrscheinlich oder sehr nützlich sind\n"
         "- richte dich besonders nach den Fokus-Themen, wenn welche gegeben sind\n"
         "- wenn ein Thema zentral ist, ergänze auch typische Kernbegriffe dieses Themas\n"
@@ -113,8 +224,8 @@ def generate_situation_core(
         "- category darf nur sein: noun, verb, phrase oder other\n"
         "- keine thematischen Kategorien wie Handlung, Natur, Alltag, BBQ oder Surfschule\n\n"
         "Beispiele:\n"
-        "- in einer Surfschule: Welle, Gleichgewicht, Paddeln, Instructor\n"
-        "- im Restaurant: Tisch, Rechnung, bestellen, Wasser\n\n"
+        "- in einer Surfschule: die Welle, das Gleichgewicht, paddeln, der Surfkurs\n"
+        "- im Restaurant: der Tisch, die Rechnung, bestellen, das Wasser\n\n"
               'Antworte nur als reine JSON-Liste von Objekten mit den Feldern "word" und "category". '
         'Für "category" sind ausschließlich diese Werte erlaubt: "noun", "verb", "phrase", "other". '
         'Keine Markdown-Codeblöcke, keine Erklärung, kein zusätzlicher Text.'
@@ -467,6 +578,18 @@ Wort oder Phrase: {word}
 
 Regeln:
 - gib nur die Übersetzung in der Zielsprache zurück
+- die Ausgabe muss vollständig in der Zielsprache sein
+- wenn die Zielsprache nicht Deutsch ist, sind deutsche Wörter und deutsche Artikel absolut verboten
+- wenn die Zielsprache Spanisch ist, dürfen nur spanische Wörter und spanische Artikel wie el, la, los, las verwendet werden
+- wenn die Zielsprache Französisch ist, dürfen nur französische Wörter und französische Artikel wie le, la, les verwendet werden
+- wenn die Zielsprache Portugiesisch ist, dürfen nur portugiesische Wörter und portugiesische Artikel wie o, a, os, as verwendet werden
+- verwende niemals deutsche Artikel wie der, die oder das, außer die Zielsprache ist Deutsch
+- wenn die Zielsprache Deutsch ist, müssen deutsche Nomen immer mit bestimmtem Artikel der, die oder das ausgegeben werden
+- wenn die Zielsprache Deutsch ist, müssen deutsche Nomen immer großgeschrieben werden
+- wenn die Zielsprache Deutsch ist, ist eine Nomen-Ausgabe ohne Artikel falsch
+- Beispiele für Deutsch: der Tisch, die Welle, das Frühstück, die Merienda
+- übersetze auch scheinbar einfache deutsche Wörter vollständig in die Zielsprache
+- gib niemals das deutsche Ausgangswort zurück, außer die Zielsprache ist Deutsch
 - kurz und natürlich
 - passend zum konkreten Kontext
 - der Kontext darf ein mehrdeutiges Wort präzisieren, aber nicht in ein anderes, nur thematisch verwandtes Wort umdeuten
@@ -484,23 +607,30 @@ Regeln:
 - wenn das deutsche Ausgangswort ein Verb ist, muss die Übersetzung ebenfalls ein Verb oder eine verbale Phrase sein
 - ein deutsches Verb darf niemals als Nomen mit Artikel übersetzt werden
 - Beispiel: "putten" darf nicht zu "el putt" werden, sondern muss als Verb oder verbale Phrase übersetzt werden
-- wenn der Begriff ein Nomen ist, gib die Übersetzung immer mit bestimmtem Artikel aus
+- wenn der Begriff ein Nomen ist, gib die Übersetzung immer mit bestimmtem Artikel der Zielsprache aus
 - das gilt für alle Sprachen außer Englisch
 - Beispiel: die Zeit, das Brett, el tiempo, la ola, o tempo, a onda
 - eine Nomen-Übersetzung ohne bestimmten Artikel ist falsch formatiert und darf nicht ausgegeben werden
-- gib Nomen immer mit bestimmtem Artikel und korrekter Großschreibung aus, wo möglich
+- gib Nomen immer mit bestimmtem Artikel der Zielsprache und korrekter Großschreibung aus, wo möglich
 - nur für Englisch gib Nomen ohne Artikel aus
 - typische Sehenswürdigkeiten und gebräuchliche Ortsbezeichnungen dürfen übersetzt werden, wenn es dafür eine übliche Form gibt
 - Personennamen, Marken und eindeutige Eigennamen ohne übliche Übersetzung nicht übersetzen
-- wenn die Zielsprache Deutsch ist, schreibe deutsche Nomen korrekt groß
+- wenn die Zielsprache Deutsch ist, schreibe deutsche Nomen korrekt groß und immer mit bestimmtem Artikel
 - wenn die Zielsprache Deutsch ist, schreibe Eigennamen korrekt groß
 """
 
+    language_key = language_name.strip().lower()
+
+    source_word = word.strip()
+    source_looks_like_single_word = bool(source_word) and " " not in source_word
+    source_looks_like_noun = source_looks_like_single_word and (
+        source_word[:1].isupper()
+        or language_key == "deutsch"
+    )
+
     require_article = (
-        language_name.strip().lower() != "englisch"
-        and bool(word)
-        and word[:1].isupper()
-        and " " not in word.strip()
+        language_key != "englisch"
+        and source_looks_like_noun
     )
 
     valid_articles = (
@@ -512,6 +642,54 @@ Regeln:
         "de ", "het ",
     )
 
+    forbidden_articles_by_language = {
+        "spanisch": ("der ", "die ", "das "),
+        "französisch": ("der ", "die ", "das "),
+        "portugiesisch": ("der ", "die ", "das "),
+        "italienisch": ("der ", "die ", "das "),
+        "englisch": ("der ", "die ", "das "),
+    }
+
+    allowed_articles_by_language = {
+        "spanisch": ("el ", "la ", "los ", "las "),
+        "französisch": ("le ", "la ", "les "),
+        "portugiesisch": ("o ", "a ", "os ", "as "),
+        "italienisch": ("il ", "lo ", "la ", "i ", "gli ", "le "),
+        "deutsch": ("der ", "die ", "das "),
+        "englisch": (),
+    }
+
+    # language_key is defined above
+
+    def looks_invalid_for_target_language(value: str) -> bool:
+        normalized_value = value.strip().lower()
+        forbidden_articles = forbidden_articles_by_language.get(language_key, ())
+        if normalized_value.startswith(forbidden_articles):
+            return True
+
+        if language_key != "deutsch":
+            source_normalized = word.strip().lower()
+            if normalized_value == source_normalized:
+                return True
+
+        return False
+
+    def looks_like_bare_german_noun(value: str) -> bool:
+        if language_key != "deutsch":
+            return False
+
+        normalized_value = value.strip().lower()
+        if normalized_value.startswith(("der ", "die ", "das ")):
+            return False
+
+        if not normalized_value:
+            return False
+
+        if source_looks_like_noun:
+            return True
+
+        return False
+
     for _ in range(3):
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
@@ -521,10 +699,17 @@ Regeln:
         result = (response.choices[0].message.content or "").strip()
         normalized_result = result.lower()
 
+        if looks_invalid_for_target_language(result):
+            continue
+
+        if looks_like_bare_german_noun(result):
+            continue
+
         if not require_article:
             return result
 
-        if normalized_result.startswith(valid_articles):
+        allowed_articles = allowed_articles_by_language.get(language_key, valid_articles)
+        if normalized_result.startswith(allowed_articles):
             return result
 
     return result

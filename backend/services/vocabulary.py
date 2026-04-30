@@ -11,6 +11,7 @@ from services.llm import (
     generate_mini_dialogue,
     translate_vocabulary_item,
     generate_sample_answer,
+    validate_vocabulary_batch,
 )
 
 STOPWORDS = {
@@ -24,6 +25,72 @@ STOPWORDS = {
 }
 
 FOUNDATION_TARGET = 200
+
+PROPER_NOUN_WITHOUT_ARTICLE = {
+    "spanien",
+    "frankreich",
+    "portugal",
+    "italien",
+    "deutschland",
+    "österreich",
+    "schweiz",
+    "niederlande",
+    "belgien",
+    "kroatien",
+    "griechenland",
+    "fuerteventura",
+    "teneriffa",
+    "mallorca",
+    "menorca",
+    "ibiza",
+}
+
+BASE_CORE_ARTICLE_OVERRIDES = {
+    "hilfe": "die Hilfe",
+    "preis": "der Preis",
+    "geld": "das Geld",
+    "zeit": "die Zeit",
+    "tag": "der Tag",
+    "woche": "die Woche",
+    "monat": "der Monat",
+    "wasser": "das Wasser",
+    "essen": "das Essen",
+    "trinken": "das Trinken",
+    "haus": "das Haus",
+    "zimmer": "das Zimmer",
+    "straße": "die Straße",
+    "auto": "das Auto",
+    "bus": "der Bus",
+    "bahn": "die Bahn",
+    "ticket": "das Ticket",
+    "name": "der Name",
+    "frage": "die Frage",
+    "antwort": "die Antwort",
+    "problem": "das Problem",
+    "lösung": "die Lösung",
+    "freund": "der Freund",
+    "frau": "die Frau",
+    "mann": "der Mann",
+    "kind": "das Kind",
+    "arbeit": "die Arbeit",
+    "urlaub": "der Urlaub",
+}
+
+BASE_CORE_VERBS = {
+    "sein", "haben", "werden", "machen", "gehen", "kommen", "wollen",
+    "können", "müssen", "brauchen", "geben", "nehmen", "sehen", "hören",
+    "sagen", "fragen", "antworten", "verstehen", "lernen", "sprechen",
+    "reden", "wissen", "denken", "finden", "mögen", "lieben", "wohnen",
+    "bleiben", "bringen", "holen",
+}
+
+BASE_CORE_VERBS = {
+    "sein", "haben", "werden", "machen", "gehen", "kommen", "wollen",
+    "können", "müssen", "brauchen", "geben", "nehmen", "sehen", "hören",
+    "sagen", "fragen", "antworten", "verstehen", "lernen", "sprechen",
+    "reden", "wissen", "denken", "finden", "mögen", "lieben", "wohnen",
+    "bleiben", "bringen", "holen",
+}
 
 
 def extract_words(text: str) -> List[str]:
@@ -45,6 +112,103 @@ def normalize_word(word: str) -> str:
 
 def normalize_lookup_key(word: str) -> str:
     return normalize_word(word).lower()
+
+
+# German noun/article helpers
+def has_german_article(word: str) -> bool:
+    return normalize_lookup_key(word).startswith(("der ", "die ", "das "))
+
+
+def normalize_article_and_noun(value: str) -> str:
+    normalized = normalize_word(value)
+    parts = normalized.split(" ", 1)
+    if len(parts) == 2 and parts[0].lower() in {"der", "die", "das"}:
+        return f"{parts[0].lower()} {parts[1][:1].upper()}{parts[1][1:]}"
+    return normalized
+
+
+def normalize_base_core_word(word: str) -> str:
+    normalized = normalize_word(word)
+    key = normalize_lookup_key(normalized)
+
+    if key in BASE_CORE_ARTICLE_OVERRIDES:
+        return BASE_CORE_ARTICLE_OVERRIDES[key]
+
+    if has_german_article(normalized):
+        return normalize_article_and_noun(normalized)
+
+    # Do not force capitalization for unknown base words; keep as-is
+    return normalized
+
+
+def normalize_base_core_category(word: str) -> str:
+    key = normalize_lookup_key(word)
+
+    if has_german_article(word):
+        return "noun"
+
+    if key in BASE_CORE_VERBS:
+        return "verb"
+
+    return "other"
+
+# Helper function to chunk items for batch processing
+def chunk_items(items: List[dict], chunk_size: int = 40) -> List[List[dict]]:
+    return [items[index:index + chunk_size] for index in range(0, len(items), chunk_size)]
+
+
+def should_force_german_noun_format(word: str, category: str) -> bool:
+    normalized = normalize_word(word)
+    if not normalized or " " in normalized:
+        return False
+
+    if normalize_lookup_key(normalized) in PROPER_NOUN_WITHOUT_ARTICLE:
+        return False
+
+    return category in {"noun", "other"}
+
+
+def normalize_german_source_word(word: str, category: str, context: str = "", allow_llm: bool = True) -> str:
+    normalized = normalize_word(word)
+    # Heuristic: if likely plural noun without article, try singular (e.g., "Antworten" -> "Antwort")
+    if " " not in normalized and normalized.endswith("en") and len(normalized) > 4:
+        # keep original if it already has article later; this only prepares a better candidate
+        singular_candidate = normalized[:-2]
+        # prefer capitalized noun form for downstream handling
+        normalized = singular_candidate
+
+    # Hard fix: single lowercase German source words are often nouns from BASE_CORE
+    # or LLM extraction, even when the category is incorrectly "other".
+    if normalized and " " not in normalized and normalized[:1].islower():
+        if normalize_lookup_key(normalized) not in PROPER_NOUN_WITHOUT_ARTICLE:
+            category = "noun"
+
+    if not should_force_german_noun_format(normalized, category):
+        return normalized
+
+    if has_german_article(normalized):
+        return normalize_article_and_noun(normalized)
+
+    if not allow_llm:
+        return normalized
+
+    candidate = translate_vocabulary_item(
+        word=normalized,
+        target_language="Deutsch",
+        context=context,
+    )
+
+    if not (candidate and has_german_article(candidate)) and normalized[:1].islower():
+        candidate = translate_vocabulary_item(
+            word=f"{normalized[:1].upper()}{normalized[1:]}",
+            target_language="Deutsch",
+            context=context,
+        )
+
+    if candidate and has_german_article(candidate):
+        return normalize_article_and_noun(candidate)
+
+    return normalized
 
 
 
@@ -220,15 +384,20 @@ def add_vocabulary_from_text(project_id: int, text: str, user_id: str = DEFAULT_
     existing_items = vocabulary_db[user_id][project_id]
     seen_words = {normalize_lookup_key(item.word) for item in existing_items}
 
-    items = extract_vocabulary_llm(text)
+    items = validate_vocabulary_batch(
+        extract_vocabulary_llm(text),
+        context=text,
+    )
 
     for item in items:
         if "word" not in item or "category" not in item:
             continue
-
         raw_word = item["word"].strip()
+        category = item["category"]
 
-        word = normalize_word(raw_word)
+        word = normalize_german_source_word(raw_word, category, context=text)
+        if has_german_article(word):
+            category = "noun"
 
         if not is_valid_word_or_phrase(word):
             continue
@@ -245,7 +414,7 @@ def add_vocabulary_from_text(project_id: int, text: str, user_id: str = DEFAULT_
 
         new_item = VocabularyItem(
             word=word,
-            category=item["category"],
+            category=category,
             source="description",
             example_sentence=None,
             example_sentence_source=None,
@@ -273,9 +442,20 @@ def extract_vocabulary_from_slots(project_id: int, user_id: str = DEFAULT_USER_I
 
     seen_words = {normalize_lookup_key(item.word) for item in vocabulary_db[user_id][project_id]}
 
-    # 1. Grundwortschatz sicherstellen
+    for existing_item in vocabulary_db[user_id][project_id]:
+        if existing_item.source == "base_core":
+            existing_item.word = normalize_base_core_word(existing_item.word)
+            existing_item.category = normalize_base_core_category(existing_item.word)
+        elif has_german_article(existing_item.word):
+            existing_item.word = normalize_article_and_noun(existing_item.word)
+            existing_item.category = "noun"
+
+    seen_words = {normalize_lookup_key(item.word) for item in vocabulary_db[user_id][project_id]}
+
+    # 1. Grundwortschatz sicherstellen (FAST PATH - no LLM)
     for raw_word in BASE_CORE:
-        word = normalize_word(raw_word)
+        word = normalize_base_core_word(raw_word)
+        category = normalize_base_core_category(word)
 
         if not is_valid_word_or_phrase(word):
             continue
@@ -290,7 +470,7 @@ def extract_vocabulary_from_slots(project_id: int, user_id: str = DEFAULT_USER_I
 
         new_base_item = VocabularyItem(
             word=word,
-            category="other",
+            category=category,
             source="base_core",
             example_sentence=None,
             example_sentence_source=None,
@@ -331,7 +511,10 @@ def extract_vocabulary_from_slots(project_id: int, user_id: str = DEFAULT_USER_I
     else:
         latest_text = slots.context or ""
 
-    items = extract_vocabulary_llm(latest_text)
+    items = validate_vocabulary_batch(
+        extract_vocabulary_llm(latest_text),
+        context=combined_text,
+    )
 
     project = next((p for p in projects_db[user_id] if p.id == project_id), None)
     focus_topics = project.focus_topics if project and getattr(project, "focus_topics", None) else []
@@ -342,11 +525,14 @@ def extract_vocabulary_from_slots(project_id: int, user_id: str = DEFAULT_USER_I
 
     # Generate the situation core only once.
     if not has_situation_core:
-        situation_items = generate_situation_core(
-            context=slots.context or "",
-            description=slots.description or "",
-            followup_notes="",
-            focus_topics=focus_topics,
+        situation_items = validate_vocabulary_batch(
+            generate_situation_core(
+                context=slots.context or "",
+                description=slots.description or "",
+                followup_notes="",
+                focus_topics=focus_topics,
+            ),
+            context=combined_text,
         )
 
     situation_words = {normalize_lookup_key(str(item.get("word", ""))) for item in situation_items if isinstance(item, dict)}
@@ -357,10 +543,12 @@ def extract_vocabulary_from_slots(project_id: int, user_id: str = DEFAULT_USER_I
     for item in items:
         if "word" not in item or "category" not in item:
             continue
-
         raw_word = item["word"].strip()
+        category = item["category"]
 
-        word = normalize_word(raw_word)
+        word = normalize_german_source_word(raw_word, category, context=combined_text)
+        if has_german_article(word):
+            category = "noun"
 
         if not is_valid_word_or_phrase(word):
             continue
@@ -377,7 +565,7 @@ def extract_vocabulary_from_slots(project_id: int, user_id: str = DEFAULT_USER_I
 
         new_item = VocabularyItem(
             word=word,
-            category=item["category"],
+            category=category,
             source="situation_core" if normalize_lookup_key(word) in situation_words else "description",
             example_sentence=None,
             example_sentence_source=None,
@@ -412,6 +600,29 @@ def rebuild_vocabulary_item(project_id: int, word: str, user_id: str = DEFAULT_U
 
     if not target_item:
         return None
+
+    slots = slots_db[user_id].get(project_id)
+    combined_text = ""
+    if slots:
+        if slots.context:
+            combined_text += slots.context
+        if slots.description:
+            if combined_text:
+                combined_text += "\n"
+            combined_text += slots.description
+        if slots.followup_notes:
+            if combined_text:
+                combined_text += "\n"
+            combined_text += slots.followup_notes
+
+    target_item.word = normalize_german_source_word(
+        target_item.word,
+        target_item.category,
+        context=combined_text,
+    )
+
+    if has_german_article(target_item.word):
+        target_item.category = "noun"
 
     target_item.translation = None
     target_item.example_sentence = None
