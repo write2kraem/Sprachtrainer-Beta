@@ -43,6 +43,10 @@ export default function ProjectPage({ params }) {
   const [learningPhase, setLearningPhase] = useState("learn");
   const [targetLanguage, setTargetLanguage] = useState("Fremdsprache");
   const [sourceLanguage, setSourceLanguage] = useState("Deutsch");
+  const [showDiagnosisLogin, setShowDiagnosisLogin] = useState(false);
+  const [diagnosisPassword, setDiagnosisPassword] = useState("");
+  const [diagnosisUnlocked, setDiagnosisUnlocked] = useState(false);
+  const [diagnosisStatus, setDiagnosisStatus] = useState("");
   const backgroundExpandedWordsRef = useRef(new Set());
   const expandingWordsRef = useRef(new Set());
   const recognitionRef = useRef(null);
@@ -1291,12 +1295,40 @@ async function submitLearningAnswer() {
     return { ...base, background: "#eef4ff", color: "#245fd1", border: "1px solid #c8dafd" };
   }
 
-  function markVocabularyItemReviewed(word, reviewStatus = "approved") {
+  async function markVocabularyItemReviewed(word, reviewStatus = "approved") {
     setVocabulary((prev) =>
       prev.map((item) =>
         item.word === word ? { ...item, review_status: reviewStatus } : item
       )
     );
+
+    try {
+      const res = await fetch(
+        apiUrl(`/projects/${projectId}/vocabulary/${encodeURIComponent(word)}/update`),
+        {
+          method: "POST",
+          headers: apiHeaders(),
+          body: JSON.stringify({ review_status: reviewStatus }),
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Review status update failed");
+      }
+    } catch (err) {
+      console.error("Review konnte nicht gespeichert werden", err);
+    }
+  }
+
+  function unlockDiagnosis() {
+    if (diagnosisPassword === "0000") {
+      setDiagnosisUnlocked(true);
+      setDiagnosisPassword("");
+      setDiagnosisStatus("");
+      return;
+    }
+
+    setDiagnosisStatus("Falsches Passwort.");
   }
 
   return (
@@ -1550,9 +1582,11 @@ async function submitLearningAnswer() {
                           : getSourceText(currentWord)}
                       </div>
 
-                      <span style={getReviewBadgeStyle(currentWord.review_status)}>
-                        {getReviewStatusLabel(currentWord.review_status)}
-                      </span>
+                      {diagnosisUnlocked && (
+                        <span style={getReviewBadgeStyle(currentWord.review_status)}>
+                          {getReviewStatusLabel(currentWord.review_status)}
+                        </span>
+                      )}
 
                       {learningDirection === "target-first" && (
                         <button
@@ -1572,19 +1606,23 @@ async function submitLearningAnswer() {
                       )}
                     </div>
 
-                    <div style={{ color: "#666", marginTop: 6 }}>
-                      Typ: {currentWord.category === "noun" ? "Nomen" : currentWord.category}
-                    </div>
+                    {diagnosisUnlocked && (
+                      <>
+                        <div style={{ color: "#666", marginTop: 6 }}>
+                          Typ: {currentWord.category === "noun" ? "Nomen" : currentWord.category}
+                        </div>
 
-                    <div style={{ color: "#666", marginTop: 4 }}>
-                      Quelle: {
-                        currentWord.source === "base_core"
-                          ? "Grundwortschatz"
-                          : currentWord.source === "situation_core"
-                          ? "Intelligent ergänzt"
-                          : "Aus deinem Interview"
-                      }
-                    </div>
+                        <div style={{ color: "#666", marginTop: 4 }}>
+                          Quelle: {
+                            currentWord.source === "base_core"
+                              ? "Grundwortschatz"
+                              : currentWord.source === "situation_core"
+                              ? "Intelligent ergänzt"
+                              : "Aus deinem Interview"
+                          }
+                        </div>
+                      </>
+                    )}
                     {learningPhase === "practice" ? (
                       <>
                         <div style={{ marginTop: 20 }}>
@@ -1678,12 +1716,14 @@ async function submitLearningAnswer() {
                           >
                             Nächstes Wort
                           </button>
-                          <button
-                            onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
-                            style={secondaryButtonStyle}
-                          >
-                            ✅ Karte passt
-                          </button>
+                          {diagnosisUnlocked && (
+                            <button
+                              onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
+                              style={secondaryButtonStyle}
+                            >
+                              ✅ Karte passt
+                            </button>
+                          )}
                           <button
                             onClick={() => setShowTranslation((prev) => !prev)}
                             style={secondaryButtonStyle}
@@ -1780,12 +1820,14 @@ async function submitLearningAnswer() {
                           >
                             Nächstes Wort
                           </button>
-                          <button
-                            onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
-                            style={secondaryButtonStyle}
-                          >
-                            ✅ Karte passt
-                          </button>
+                          {diagnosisUnlocked && (
+                            <button
+                              onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
+                              style={secondaryButtonStyle}
+                            >
+                              ✅ Karte passt
+                            </button>
+                          )}
                           <button
                             onClick={() => setShowTranslation((prev) => !prev)}
                             style={secondaryButtonStyle}
@@ -2102,6 +2144,67 @@ async function submitLearningAnswer() {
             </div>
           </div>
         </div>
+        <section style={{ ...sectionStyle, marginBottom: 24 }}>
+          <button
+            onClick={() => setShowDiagnosisLogin((prev) => !prev)}
+            style={accordionHeaderStyle}
+          >
+            <h2 style={{ fontSize: 24, fontWeight: "bold", margin: 0 }}>
+              Diagnose
+            </h2>
+            <span style={{ fontSize: 24, color: "#4f8cff" }}>
+              {getSectionArrow(showDiagnosisLogin)}
+            </span>
+          </button>
+
+          {!diagnosisUnlocked ? (
+            showDiagnosisLogin && (
+              <div style={{ display: "grid", gap: 10, maxWidth: 360 }}>
+                <p style={{ margin: 0, color: "#555" }}>
+                  Diagnosefunktionen sind ausgeblendet. Passwort eingeben, um Kartenprüfung und Rohdaten anzuzeigen.
+                </p>
+                <input
+                  type="password"
+                  value={diagnosisPassword}
+                  onChange={(e) => setDiagnosisPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      unlockDiagnosis();
+                    }
+                  }}
+                  placeholder="Passwort"
+                  style={{
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #d7deea",
+                    background: "#ffffff",
+                  }}
+                />
+                {diagnosisStatus && (
+                  <p style={{ margin: 0, color: "#a33a3a" }}>{diagnosisStatus}</p>
+                )}
+                <button onClick={unlockDiagnosis} style={primaryButtonStyle}>
+                  Diagnose freischalten
+                </button>
+              </div>
+            )
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              <p style={{ margin: 0, color: "#1f7a3d" }}>
+                Diagnose ist aktiv. Review-Badges, Typen, Quellen und Kartenprüfungen werden angezeigt.
+              </p>
+              <button
+                onClick={() => {
+                  setDiagnosisUnlocked(false);
+                  setShowDiagnosisLogin(false);
+                }}
+                style={secondaryButtonStyle}
+              >
+                Diagnose ausblenden
+              </button>
+            </div>
+          )}
+        </section>
         <section
         style={sectionStyle}
         >
@@ -2151,9 +2254,11 @@ async function submitLearningAnswer() {
                             : getSourceText(item)}
                         </div>
 
-                        <span style={getReviewBadgeStyle(item.review_status)}>
-                          {getReviewStatusLabel(item.review_status)}
-                        </span>
+                        {diagnosisUnlocked && (
+                          <span style={getReviewBadgeStyle(item.review_status)}>
+                            {getReviewStatusLabel(item.review_status)}
+                          </span>
+                        )}
 
                         {learningDirection === "target-first" && (
                           <button
@@ -2211,33 +2316,37 @@ async function submitLearningAnswer() {
                       </div>
                     </div>
 
-                    <div style={{ color: "#666", marginTop: 6 }}>
-                        Typ: {item.category === "noun" ? "Nomen" : item.category}
-                    </div>
+                    {diagnosisUnlocked && (
+                      <>
+                        <div style={{ color: "#666", marginTop: 6 }}>
+                            Typ: {item.category === "noun" ? "Nomen" : item.category}
+                        </div>
 
-                    <div style={{ color: "#666", marginTop: 4 }}>
-                        Quelle: {
-                        item.source === "base_core"
-                            ? "Grundwortschatz"
-                            : item.source === "situation_core"
-                            ? "Aus Kontext ergänzt"
-                            : "Aus deinem Interview"
-                        }
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                      <button
-                        onClick={() => markVocabularyItemReviewed(item.word, "approved")}
-                        style={secondaryButtonStyle}
-                      >
-                        ✅ Karte passt
-                      </button>
-                      <button
-                        onClick={() => markVocabularyItemReviewed(item.word, "edited")}
-                        style={secondaryButtonStyle}
-                      >
-                        ✏️ Korrektur nötig
-                      </button>
-                    </div>
+                        <div style={{ color: "#666", marginTop: 4 }}>
+                            Quelle: {
+                            item.source === "base_core"
+                                ? "Grundwortschatz"
+                                : item.source === "situation_core"
+                                ? "Aus Kontext ergänzt"
+                                : "Aus deinem Interview"
+                            }
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                          <button
+                            onClick={() => markVocabularyItemReviewed(item.word, "approved")}
+                            style={secondaryButtonStyle}
+                          >
+                            ✅ Karte passt
+                          </button>
+                          <button
+                            onClick={() => markVocabularyItemReviewed(item.word, "edited")}
+                            style={secondaryButtonStyle}
+                          >
+                            ✏️ Korrektur nötig
+                          </button>
+                        </div>
+                      </>
+                    )}
  
 
                     <div style={{ marginTop: 8 }}>

@@ -7,7 +7,7 @@ from models import Project, Message, NewMessage, ProjectSlots
 from database import DEFAULT_USER_ID, ensure_user, projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data
 from services.interview import get_next_question, update_slots
 from services.llm import generate_roleplay_opening, continue_roleplay, evaluate_learning_answer_llm
-from services.vocabulary import extract_vocabulary_from_slots, expand_vocabulary_item, rebuild_vocabulary_item
+from services.vocabulary import extract_vocabulary_from_slots, expand_vocabulary_item, rebuild_vocabulary_item, normalize_lookup_key
 
 app = FastAPI()
 app.add_middleware(
@@ -175,6 +175,48 @@ def rebuild_vocabulary_word(project_id: int, word: str, request: Request):
 
     save_data()
     return item
+
+
+# New route: Update vocabulary word
+@app.post("/projects/{project_id}/vocabulary/{word}/update")
+def update_vocabulary_word(project_id: int, word: str, payload: dict[str, Any], request: Request):
+    user_id = get_user_id(request)
+
+    if project_id not in vocabulary_db[user_id]:
+        raise HTTPException(status_code=404, detail="Wortschatz nicht gefunden")
+
+    target_item = next(
+        (
+            item
+            for item in vocabulary_db[user_id][project_id]
+            if normalize_lookup_key(item.word) == normalize_lookup_key(word)
+        ),
+        None,
+    )
+
+    if not target_item:
+        raise HTTPException(status_code=404, detail="Wort nicht gefunden")
+
+    new_word = payload.get("word")
+    if isinstance(new_word, str) and new_word.strip():
+        target_item.word = new_word.strip()
+
+    new_translation = payload.get("translation")
+    if isinstance(new_translation, str):
+        target_item.translation = new_translation.strip() or None
+
+    new_category = payload.get("category")
+    if isinstance(new_category, str) and new_category in {"noun", "verb", "phrase", "other"}:
+        target_item.category = new_category
+
+    new_review_status = payload.get("review_status")
+    if isinstance(new_review_status, str) and new_review_status in {"new", "approved", "edited", "rejected"}:
+        target_item.review_status = new_review_status
+    elif any(key in payload for key in ["word", "translation", "category"]):
+        target_item.review_status = "edited"
+
+    save_data()
+    return target_item
 
 @app.post("/projects/{project_id}/interview/start")
 def start_interview(project_id: int, request: Request):
