@@ -8,6 +8,7 @@ from services.llm import (
     extract_vocabulary_llm,
     generate_situation_core,
     generate_example_sentence,
+    generate_example_sentence_pair,
     generate_mini_dialogue,
     translate_vocabulary_item,
     generate_sample_answer,
@@ -327,23 +328,18 @@ def expand_vocabulary_item(project_id: int, word: str, user_id: str = DEFAULT_US
         target_item.expanded = True
         return target_item
 
-    example_sentence_target = generate_example_sentence(
+    example_pair = generate_example_sentence_pair(
         word=target_item.translation,
         category=target_item.category,
         context=combined_text,
         target_language=target_language,
         source_word=target_item.word,
+        source_language=source_language,
         foundation_phase=foundation_phase,
     )
 
-    example_sentence_source = generate_example_sentence(
-        word=target_item.word,
-        category=target_item.category,
-        context=combined_text,
-        target_language=source_language,
-        source_word=target_item.translation,
-        foundation_phase=foundation_phase,
-    )
+    example_sentence_target = example_pair.get("target") or None
+    example_sentence_source = example_pair.get("source") or None
 
     dialogue_line_1, dialogue_line_2 = generate_mini_dialogue(
         word=target_item.translation,

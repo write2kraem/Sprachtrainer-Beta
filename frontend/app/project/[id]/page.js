@@ -1111,9 +1111,7 @@ async function submitLearningAnswer() {
       const needsExpansion =
         !currentWord.translation ||
         !currentWord.example_sentence_source ||
-        !currentWord.example_sentence_target ||
-        !currentWord.dialogue_line_1 ||
-        !currentWord.dialogue_line_2;
+        !currentWord.example_sentence_target;
 
       if (!needsExpansion) return;
       if (expandingWordsRef.current.has(currentWord.word)) return;
@@ -1200,9 +1198,7 @@ async function submitLearningAnswer() {
         const needsExpansion =
           !item.translation ||
           !item.example_sentence_source ||
-          !item.example_sentence_target ||
-          !item.dialogue_line_1 ||
-          !item.dialogue_line_2;
+          !item.example_sentence_target;
 
         return (
           needsExpansion &&
@@ -1346,7 +1342,7 @@ async function submitLearningAnswer() {
       </a>
 
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 8 }}>
-        Sprachtrainer xxL
+        Sprachtrainer 2
       </h1>
 
 
@@ -1906,21 +1902,12 @@ async function submitLearningAnswer() {
                           )}
                         </div>
 
-                        {currentWord.dialogue_line_1 && (
+                        {currentWord.example_sentence_source && (
                           <div style={{ marginTop: 16 }}>
                             <div style={{ fontWeight: "bold", marginBottom: 6 }}>
-                              Typischer Satz
+                              Beispielsatz auf {getSecondaryLanguageLabel()}
                             </div>
-                            <div>{currentWord.dialogue_line_1}</div>
-                          </div>
-                        )}
-
-                        {currentWord.sample_answer && (
-                          <div style={{ marginTop: 16 }}>
-                            <div style={{ fontWeight: "bold", marginBottom: 6 }}>
-                              So könntest du antworten
-                            </div>
-                            <div>{currentWord.sample_answer}</div>
+                            <div>{currentWord.example_sentence_source}</div>
                           </div>
                         )}
                       </div>

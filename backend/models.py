@@ -40,3 +40,4 @@ class VocabularyItem(BaseModel):
     expanded: bool = False
     translation: Optional[str] = None
     sample_answer: Optional[str] = None
+    review_status: str = "new"

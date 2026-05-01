@@ -321,6 +321,94 @@ Regeln:
     return ""
 
 
+# New function: generate_example_sentence_pair
+def generate_example_sentence_pair(
+    word: str,
+    category: str,
+    context: str,
+    target_language: str,
+    source_word: Optional[str] = None,
+    source_language: str = "Deutsch",
+    foundation_phase: bool = False,
+) -> dict:
+    target_language_name = get_language_display_name(target_language)
+    source_language_name = get_language_display_name(source_language)
+
+    prompt = f"""
+Erstelle genau ein einfaches Beispielsatz-Paar für eine Sprachlern-Karteikarte.
+
+Zielsprache: {target_language_name}
+Quellsprache: {source_language_name}
+Zielwort oder Zielphrase: {word}
+Deutsches Ausgangswort oder Ausgangsphrase: {source_word or ""}
+Kategorie: {category}
+Kontext: {context}
+Foundation-Phase: {foundation_phase}
+
+Aufgabe:
+- Erstelle einen natürlichen Beispielsatz in der Zielsprache.
+- Erstelle dazu eine sinngemäße Übersetzung in der Quellsprache.
+- Beide Sätze müssen dieselbe Bedeutung haben.
+
+Regeln:
+- antworte nur als JSON
+- exakt die Felder "target" und "source"
+- "target" ist der Satz in der Zielsprache
+- "source" ist die Übersetzung in der Quellsprache
+- der target-Satz muss das Zielwort oder die Zielphrase genau einmal enthalten
+- der source-Satz muss die Bedeutung natürlich wiedergeben
+- keine Frage-Antwort-Struktur
+- kein Mini-Dialog
+- keine Erklärung
+- keine Listen
+- keine Sprachmischung
+- einfach und alltagsnah
+- passend zum konkreten Kontext
+- wenn Foundation-Phase = True, benutze sehr einfache Satzstruktur und häufige Wörter
+
+Format:
+{{
+  "target": "Necesito una herramienta.",
+  "source": "Ich brauche ein Werkzeug."
+}}
+"""
+
+    for _ in range(2):
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        )
+
+        result = (response.choices[0].message.content or "{}").strip()
+
+        if result.startswith("```"):
+            result = result.strip("`")
+            if result.startswith("json"):
+                result = result[4:].strip()
+
+        try:
+            parsed = json.loads(result)
+        except json.JSONDecodeError:
+            continue
+
+        if not isinstance(parsed, dict):
+            continue
+
+        target = str(parsed.get("target", "")).strip()
+        source = str(parsed.get("source", "")).strip()
+
+        if not target or not source:
+            continue
+
+        normalized_word = word.strip().lower()
+        if normalized_word and normalized_word not in f" {target.lower()} ":
+            continue
+
+        return {"target": target, "source": source}
+
+    return {"target": "", "source": ""}
+
 def generate_mini_dialogue(
     word: str,
     category: str,
