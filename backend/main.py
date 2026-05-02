@@ -218,6 +218,30 @@ def update_vocabulary_word(project_id: int, word: str, payload: dict[str, Any], 
     save_data()
     return target_item
 
+
+# Add rebuild-all endpoint
+@app.post("/projects/{project_id}/vocabulary/rebuild-all")
+def rebuild_all_vocabulary_words(project_id: int, request: Request):
+    user_id = get_user_id(request)
+
+    if project_id not in vocabulary_db[user_id]:
+        raise HTTPException(status_code=404, detail="Wortschatz nicht gefunden")
+
+    reset_count = 0
+    for item in vocabulary_db[user_id][project_id]:
+        item.translation = None
+        item.example_sentence = None
+        item.example_sentence_source = None
+        item.example_sentence_target = None
+        item.dialogue_line_1 = None
+        item.dialogue_line_2 = None
+        item.sample_answer = None
+        item.expanded = False
+        reset_count += 1
+
+    save_data()
+    return {"status": "ok", "reset_count": reset_count}
+
 @app.post("/projects/{project_id}/interview/start")
 def start_interview(project_id: int, request: Request):
     user_id = get_user_id(request)

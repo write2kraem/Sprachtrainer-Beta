@@ -10,8 +10,12 @@ BASE_CORE = [
     "heute", "morgen", "jetzt", "hier", "dort", "links", "rechts",
     "groß", "klein", "gut", "schlecht", "schnell", "langsam", "einfach",
     "schwer", "viel", "wenig", "mehr", "weniger", "ja", "nein", "bitte",
-    "danke", "hilfe", "preis", "geld", "zeit", "tag", "woche", "monat",
-    "wasser", "essen", "trinken", "haus", "zimmer", "straße", "auto",
-    "bus", "bahn", "ticket", "name", "frage", "antwort", "problem",
-    "lösung", "freund", "frau", "mann", "kind", "arbeit", "urlaub"
+    "danke",
+
+    # Nomen (mit Artikel)
+    "die Hilfe", "der Preis", "das Geld", "die Zeit", "der Tag", "die Woche", "der Monat",
+    "das Wasser", "das Essen", "das Trinken", "das Haus", "das Zimmer", "die Straße",
+    "das Auto", "der Bus", "die Bahn", "das Ticket", "der Name", "die Frage",
+    "die Antwort", "das Problem", "die Lösung", "der Freund", "die Frau",
+    "der Mann", "das Kind", "die Arbeit", "der Urlaub"
 ]

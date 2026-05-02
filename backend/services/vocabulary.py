@@ -77,13 +77,6 @@ BASE_CORE_ARTICLE_OVERRIDES = {
     "urlaub": "der Urlaub",
 }
 
-BASE_CORE_VERBS = {
-    "sein", "haben", "werden", "machen", "gehen", "kommen", "wollen",
-    "können", "müssen", "brauchen", "geben", "nehmen", "sehen", "hören",
-    "sagen", "fragen", "antworten", "verstehen", "lernen", "sprechen",
-    "reden", "wissen", "denken", "finden", "mögen", "lieben", "wohnen",
-    "bleiben", "bringen", "holen",
-}
 
 BASE_CORE_VERBS = {
     "sein", "haben", "werden", "machen", "gehen", "kommen", "wollen",
@@ -171,16 +164,16 @@ def should_force_german_noun_format(word: str, category: str) -> bool:
 
 def normalize_german_source_word(word: str, category: str, context: str = "", allow_llm: bool = True) -> str:
     normalized = normalize_word(word)
-    # Heuristic: if likely plural noun without article, try singular (e.g., "Antworten" -> "Antwort")
-    if " " not in normalized and normalized.endswith("en") and len(normalized) > 4:
-        # keep original if it already has article later; this only prepares a better candidate
+
+    # Heuristic: if likely plural noun without article, try singular (e.g., "Antworten" -> "Antwort").
+    # Important: never apply this to explicit verbs such as "wissen", "fragen", "machen".
+    if category in {"noun", "other"} and " " not in normalized and normalized.endswith("en") and len(normalized) > 4:
         singular_candidate = normalized[:-2]
-        # prefer capitalized noun form for downstream handling
         normalized = singular_candidate
 
-    # Hard fix: single lowercase German source words are often nouns from BASE_CORE
-    # or LLM extraction, even when the category is incorrectly "other".
-    if normalized and " " not in normalized and normalized[:1].islower():
+    # Single lowercase German source words can be nouns from extraction,
+    # but never override explicit verbs or phrases.
+    if category in {"noun", "other"} and normalized and " " not in normalized and normalized[:1].islower():
         if normalize_lookup_key(normalized) not in PROPER_NOUN_WITHOUT_ARTICLE:
             category = "noun"
 
@@ -197,6 +190,7 @@ def normalize_german_source_word(word: str, category: str, context: str = "", al
         word=normalized,
         target_language="Deutsch",
         context=context,
+        category=category,
     )
 
     if not (candidate and has_german_article(candidate)) and normalized[:1].islower():
@@ -204,6 +198,7 @@ def normalize_german_source_word(word: str, category: str, context: str = "", al
             word=f"{normalized[:1].upper()}{normalized[1:]}",
             target_language="Deutsch",
             context=context,
+            category=category,
         )
 
     if candidate and has_german_article(candidate):
@@ -311,6 +306,7 @@ def expand_vocabulary_item(project_id: int, word: str, user_id: str = DEFAULT_US
         word=target_item.word,
         target_language=target_language,
         context=combined_text,
+        category=target_item.category,
     )
 
     if not translation or normalize_lookup_key(translation) == normalize_lookup_key(target_item.word):

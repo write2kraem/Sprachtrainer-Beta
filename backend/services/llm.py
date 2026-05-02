@@ -655,7 +655,7 @@ Antworte nur mit genau einer deutschen Frage.
     return (response.choices[0].message.content or "").strip()
 
 
-def translate_vocabulary_item(word: str, target_language: str, context: str) -> str:
+def translate_vocabulary_item(word: str, target_language: str, context: str, category: Optional[str] = None) -> str:
     language_name = get_language_display_name(target_language)
     prompt = f"""
 Übersetze das folgende deutsche Wort oder die Phrase in die Zielsprache.
@@ -678,6 +678,13 @@ Regeln:
 - Beispiele für Deutsch: der Tisch, die Welle, das Frühstück, die Merienda
 - übersetze auch scheinbar einfache deutsche Wörter vollständig in die Zielsprache
 - gib niemals das deutsche Ausgangswort zurück, außer die Zielsprache ist Deutsch
+- gib niemals mehrere alternative Übersetzungen hintereinander aus
+- wähle genau eine beste Standardübersetzung im gegebenen Kontext
+- kombiniere keine Synonyme zu einer künstlichen Phrase
+- Beispiel falsch: "dar proporcionar"
+- Beispiel richtig: "dar" oder "proporcionar", aber nicht beide zusammen
+- wenn zwei Wörter nur Alternativen sind, entscheide dich für eines
+- eine Mehrwort-Ausgabe ist nur erlaubt, wenn sie eine echte feste Phrase oder grammatisch notwendige Konstruktion ist
 - kurz und natürlich
 - passend zum konkreten Kontext
 - der Kontext darf ein mehrdeutiges Wort präzisieren, aber nicht in ein anderes, nur thematisch verwandtes Wort umdeuten
@@ -693,6 +700,10 @@ Regeln:
 - wenn es für den Begriff eine gebräuchliche, etablierte Übersetzung in der Zielsprache gibt, verwende diese
 - bestimme zuerst die Wortart des deutschen Ausgangswortes
 - wenn das deutsche Ausgangswort ein Verb ist, muss die Übersetzung ebenfalls ein Verb oder eine verbale Phrase sein
+- wenn Kategorie = verb ist, muss die Übersetzung ebenfalls ein Verb oder eine verbale Phrase sein
+- wenn Kategorie = verb ist und die Zielsprache Spanisch ist, darf die Antwort nicht mit el, la, los oder las beginnen
+- wenn Kategorie = verb ist und die Zielsprache Französisch ist, darf die Antwort nicht mit le, la oder les beginnen
+- wenn Kategorie = verb ist und die Zielsprache Portugiesisch ist, darf die Antwort nicht mit o, a, os oder as beginnen
 - ein deutsches Verb darf niemals als Nomen mit Artikel übersetzt werden
 - Beispiel: "putten" darf nicht zu "el putt" werden, sondern muss als Verb oder verbale Phrase übersetzt werden
 - wenn der Begriff ein Nomen ist, gib die Übersetzung immer mit bestimmtem Artikel der Zielsprache aus
@@ -778,6 +789,38 @@ Regeln:
 
         return False
 
+    def looks_like_concatenated_spanish_infinitives(value: str) -> bool:
+        if language_key != "spanisch":
+            return False
+
+        words = value.strip().lower().split()
+        if len(words) != 2:
+            return False
+
+        if words[0] in {"el", "la", "los", "las"}:
+            return False
+
+        def is_spanish_infinitive(token: str) -> bool:
+            return token.endswith(("ar", "er", "ir")) and len(token) > 3
+
+        return is_spanish_infinitive(words[0]) and is_spanish_infinitive(words[1])
+
+    def looks_like_noun_when_source_is_verb(value: str) -> bool:
+        if category != "verb":
+            return False
+
+        normalized_value = value.strip().lower()
+
+        article_prefixes_by_language = {
+            "spanisch": ("el ", "la ", "los ", "las "),
+            "französisch": ("le ", "la ", "les "),
+            "portugiesisch": ("o ", "a ", "os ", "as "),
+            "italienisch": ("il ", "lo ", "la ", "i ", "gli ", "le "),
+            "deutsch": ("der ", "die ", "das "),
+        }
+
+        return normalized_value.startswith(article_prefixes_by_language.get(language_key, ()))
+
     for _ in range(3):
         response = client.chat.completions.create(
             model="gpt-4.1-mini",
@@ -791,6 +834,12 @@ Regeln:
             continue
 
         if looks_like_bare_german_noun(result):
+            continue
+
+        if looks_like_concatenated_spanish_infinitives(result):
+            continue
+
+        if looks_like_noun_when_source_is_verb(result):
             continue
 
         if not require_article:
@@ -893,6 +942,8 @@ Regeln:
 - "correct" = answer entspricht expected oder ist nahezu gleichbedeutend in derselben Sprache
 - "acceptable" = answer ist in derselben Sprache inhaltlich richtig, aber etwas weniger üblich oder etwas weniger präzise
 - "incorrect" = answer bezeichnet eine andere Bedeutung oder eine andere Übersetzung
+- Wenn die Antwort mehrere alternative Übersetzungen ohne grammatische Verbindung aneinanderreiht, ist sie incorrect.
+- Beispiel: "dar proporcionar" ist incorrect, weil "dar" und "proporcionar" zwei Alternativen sind, keine gültige Phrase.
 - Feedback kurz, freundlich und konkret auf Deutsch
 - formuliere das Feedback semantisch und kontextbezogen, nicht formalistisch
 - sage nicht einfach, dass expected korrekt sei, wenn der Kontext eher eine andere Bedeutung nahelegt

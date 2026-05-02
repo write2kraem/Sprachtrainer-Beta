@@ -34,6 +34,7 @@ export default function ProjectPage({ params }) {
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [masteredWords, setMasteredWords] = useState({});
+  const [wrongAnswerWords, setWrongAnswerWords] = useState({});
   const [learningAnswer, setLearningAnswer] = useState("");
   const [learningFeedback, setLearningFeedback] = useState(null);
   const [isRebuildingCard, setIsRebuildingCard] = useState(false);
@@ -47,6 +48,7 @@ export default function ProjectPage({ params }) {
   const [diagnosisPassword, setDiagnosisPassword] = useState("");
   const [diagnosisUnlocked, setDiagnosisUnlocked] = useState(false);
   const [diagnosisStatus, setDiagnosisStatus] = useState("");
+  const [isRebuildingAllCards, setIsRebuildingAllCards] = useState(false);
   const backgroundExpandedWordsRef = useRef(new Set());
   const expandingWordsRef = useRef(new Set());
   const recognitionRef = useRef(null);
@@ -727,7 +729,11 @@ async function submitLearningAnswer() {
         lastCorrect: Date.now(),
       },
     }));
-
+    setWrongAnswerWords((prev) => {
+      const next = { ...prev };
+      delete next[currentWord.word];
+      return next;
+    });
     const retryStore = window.__retryCounts || (window.__retryCounts = {});
     const queue = window.__reinsertQueue || (window.__reinsertQueue = []);
     retryStore[currentWord.word] = 0;
@@ -746,69 +752,82 @@ async function submitLearningAnswer() {
     return;
   }
 
-    try {
-      const res = await fetch(
-        apiUrl(`/projects/${projectId}/learning/evaluate`),
-        {
-          method: "POST",
-          headers: apiHeaders(),
-          body: JSON.stringify({
-            answer,
-            expected,
-            word: currentWord.word,
-            category: currentWord.category,
-            direction: learningDirection,
-          }),
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error("LLM-Bewertung fehlgeschlagen");
+  try {
+    const res = await fetch(
+      apiUrl(`/projects/${projectId}/learning/evaluate`),
+      {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({
+          answer,
+          expected,
+          word: currentWord.word,
+          category: currentWord.category,
+          direction: learningDirection,
+        }),
       }
+    );
 
-      const evaluation = await res.json();
-
-      if (evaluation.rating === "correct" || evaluation.rating === "acceptable") {
-        if (evaluation.rating === "correct") {
-          setMasteredWords((prev) => ({
-            ...prev,
-            [currentWord.word]: {
-              mastered: true,
-              lastCorrect: Date.now(),
-            },
-          }));
-        } else {
-          setMasteredWords((prev) => ({
-            ...prev,
-            [currentWord.word]: {
-              ...(prev[currentWord.word] || {}),
-              lastWarning: Date.now(),
-            },
-          }));
-        }
-        setLearningFeedback({
-          type: evaluation.rating === "correct" ? "success" : "warning",
-          text:
-            evaluation.feedback ||
-            (evaluation.rating === "correct"
-              ? "Perfekt – genau richtig."
-              : `Inhaltlich richtig. Üblicher wäre hier: ${evaluation.preferred || expected}`),
-        });
-      } else {
-        setLearningFeedback({
-          type: "error",
-          text: evaluation.feedback || `Noch nicht richtig. Erwartet war: ${evaluation.preferred || expected}`,
-        });
-      }
-    } catch (err) {
-      setLearningFeedback({
-        type: "error",
-        text: `Noch nicht richtig. Erwartet war: ${expected}`,
-      });
+    if (!res.ok) {
+      throw new Error("LLM-Bewertung fehlgeschlagen");
     }
 
-    setShowTranslation(true);
-    speechFinalRef.current = answer;
+    const evaluation = await res.json();
+
+    if (evaluation.rating === "correct" || evaluation.rating === "acceptable") {
+      if (evaluation.rating === "correct") {
+        setMasteredWords((prev) => ({
+          ...prev,
+          [currentWord.word]: {
+            mastered: true,
+            lastCorrect: Date.now(),
+          },
+        }));
+        setWrongAnswerWords((prev) => {
+          const next = { ...prev };
+          delete next[currentWord.word];
+          return next;
+        });
+      } else {
+        setMasteredWords((prev) => ({
+          ...prev,
+          [currentWord.word]: {
+            ...(prev[currentWord.word] || {}),
+            lastWarning: Date.now(),
+          },
+        }));
+      }
+      setLearningFeedback({
+        type: evaluation.rating === "correct" ? "success" : "warning",
+        text:
+          evaluation.feedback ||
+          (evaluation.rating === "correct"
+            ? "Perfekt – genau richtig."
+            : `Inhaltlich richtig. Üblicher wäre hier: ${evaluation.preferred || expected}`),
+      });
+    } else {
+      setWrongAnswerWords((prev) => ({
+        ...prev,
+        [currentWord.word]: Date.now(),
+      }));
+      setLearningFeedback({
+        type: "error",
+        text: evaluation.feedback || `Noch nicht richtig. Erwartet war: ${evaluation.preferred || expected}`,
+      });
+    }
+  } catch (err) {
+    setWrongAnswerWords((prev) => ({
+      ...prev,
+      [currentWord.word]: Date.now(),
+    }));
+    setLearningFeedback({
+      type: "error",
+      text: `Noch nicht richtig. Erwartet war: ${expected}`,
+    });
+  }
+
+  setShowTranslation(true);
+  speechFinalRef.current = answer;
 }
 
     function resetLearningCardState() {
@@ -820,13 +839,47 @@ async function submitLearningAnswer() {
       speechFinalRef.current = "";
     }
 
-   const currentWord =
-     Array.isArray(vocabulary) && vocabulary.length > 0
-        ? vocabulary[currentIndex]
+    function getLearningPriority(item) {
+      let score = 0;
+      const isVerb = item.category === "verb" || item.category === "verb_conjugated";
+
+      // Lernmodus-Priorität:
+      // 1. falsch beantwortete Wörter
+      // 2. Verben
+      // 3. persönliche Interview-/Kontextwörter
+      // 4. Review-relevante Karten
+      // 5. Grundwortschatz zuletzt, aber Verben bleiben trotzdem weit oben
+      if (wrongAnswerWords[item.word]) score += 100;
+      if (isVerb) score += 80;
+      if (item.source === "description") score += 60;
+      if (item.source === "situation_core") score += 50;
+      if (item.review_status === "edited") score += 30;
+      if (item.review_status === "new") score += 10;
+      if (item.source === "base_core" && !isVerb) score -= 20;
+
+      return score;
+    }
+
+    const learningVocabulary = Array.isArray(vocabulary)
+      ? [...vocabulary].sort((a, b) => {
+          const priorityDifference = getLearningPriority(b) - getLearningPriority(a);
+          if (priorityDifference !== 0) return priorityDifference;
+          const aIsVerb = a.category === "verb" || a.category === "verb_conjugated";
+          const bIsVerb = b.category === "verb" || b.category === "verb_conjugated";
+          if (aIsVerb !== bIsVerb) return aIsVerb ? -1 : 1;
+          return String(a.word || "").localeCompare(String(b.word || ""));
+        })
+      : [];
+
+    const activeVocabulary = showLearningMode ? learningVocabulary : vocabulary;
+
+    const currentWord =
+      Array.isArray(activeVocabulary) && activeVocabulary.length > 0
+        ? activeVocabulary[currentIndex % activeVocabulary.length]
         : null;
 
     function nextWord() {
-      if (vocabulary.length === 0) return;
+      if (activeVocabulary.length === 0) return;
 
       if (learningPhase === "learn" && currentWord?.word) {
         setSeenWords((prev) => ({
@@ -850,7 +903,7 @@ async function submitLearningAnswer() {
             remaining: Math.floor(Math.random() * 3) + 3, // 3–5
           });
 
-          setCurrentIndex((prev) => (prev + 1) % vocabulary.length);
+          setCurrentIndex((prev) => (prev + 1) % activeVocabulary.length);
           setShowExampleQuestion(false);
           setShowExampleSentence(false);
           setShowSampleAnswer(false);
@@ -885,26 +938,26 @@ async function submitLearningAnswer() {
         const wordToReinsert = queue[readyIndex].word;
         queue.splice(readyIndex, 1);
 
-        const newIndex = vocabulary.findIndex((v) => v.word === wordToReinsert);
+        const newIndex = activeVocabulary.findIndex((v) => v.word === wordToReinsert);
         if (newIndex !== -1) {
           setCurrentIndex(newIndex);
         } else {
-          setCurrentIndex((prev) => (prev + 1) % vocabulary.length);
+          setCurrentIndex((prev) => (prev + 1) % activeVocabulary.length);
         }
       } else {
         setCurrentIndex((prev) => {
-          let next = (prev + 1) % vocabulary.length;
+          let next = (prev + 1) % activeVocabulary.length;
           const now = Date.now();
           const threshold = 1000 * 60 * 60 * 6; // 6h
 
           // skip recently correct words
-          for (let i = 0; i < vocabulary.length; i++) {
-            const candidate = vocabulary[next];
+          for (let i = 0; i < activeVocabulary.length; i++) {
+            const candidate = activeVocabulary[next];
             const data = masteredWords[candidate?.word];
             const isRecent = data?.lastCorrect && (now - data.lastCorrect < threshold);
 
             if (!isRecent) break;
-            next = (next + 1) % vocabulary.length;
+            next = (next + 1) % activeVocabulary.length;
           }
 
           return next;
@@ -926,6 +979,11 @@ async function submitLearningAnswer() {
       const isLearningTarget = section === "learning";
       const isRoleplayTarget = section === "roleplay";
       const isVocabularyTarget = section === "vocabulary";
+
+      if (isLearningTarget && !showLearningMode) {
+        setCurrentIndex(0);
+        resetLearningCardState();
+      }
 
       const nextInterview = isInterviewTarget ? !showInterviewSection : false;
       const nextLearning = isLearningTarget ? !showLearningMode : false;
@@ -1316,6 +1374,43 @@ async function submitLearningAnswer() {
     }
   }
 
+  async function rebuildAllVocabularyCards() {
+    if (isRebuildingAllCards) return;
+
+    const confirmed = window.confirm(
+      "Alle generierten Karteninhalte zurücksetzen? Übersetzungen und Beispielsätze werden anschließend beim Anzeigen neu erzeugt."
+    );
+
+    if (!confirmed) return;
+
+    setIsRebuildingAllCards(true);
+    setDiagnosisStatus("Karten werden zurückgesetzt...");
+
+    try {
+      const res = await fetch(apiUrl(`/projects/${projectId}/vocabulary/rebuild-all`), {
+        method: "POST",
+        headers: apiHeaders(),
+      });
+
+      if (!res.ok) {
+        throw new Error("Rebuild all failed");
+      }
+
+      const data = await res.json();
+      await loadVocabulary();
+      resetLearningCardState();
+      setCurrentIndex(0);
+      backgroundExpandedWordsRef.current = new Set();
+      expandingWordsRef.current = new Set();
+      setDiagnosisStatus(`Alle Karten zurückgesetzt (${data.reset_count || 0}).`);
+    } catch (err) {
+      console.error("Alle Karten konnten nicht zurückgesetzt werden", err);
+      setDiagnosisStatus("Alle Karten konnten nicht zurückgesetzt werden.");
+    } finally {
+      setIsRebuildingAllCards(false);
+    }
+  }
+
   function unlockDiagnosis() {
     if (diagnosisPassword === "0000") {
       setDiagnosisUnlocked(true);
@@ -1342,7 +1437,7 @@ async function submitLearningAnswer() {
       </a>
 
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 8 }}>
-        Sprachtrainer 2
+        Sprachtrainer 4
       </h1>
 
 
@@ -2180,6 +2275,18 @@ async function submitLearningAnswer() {
               <p style={{ margin: 0, color: "#1f7a3d" }}>
                 Diagnose ist aktiv. Review-Badges, Typen, Quellen und Kartenprüfungen werden angezeigt.
               </p>
+              {diagnosisStatus && (
+                <p style={{ margin: 0, color: diagnosisStatus.includes("nicht") ? "#a33a3a" : "#1f7a3d" }}>
+                  {diagnosisStatus}
+                </p>
+              )}
+              <button
+                onClick={rebuildAllVocabularyCards}
+                disabled={isRebuildingAllCards}
+                style={isRebuildingAllCards ? disabledPrimaryButtonStyle : secondaryButtonStyle}
+              >
+                {isRebuildingAllCards ? "Setze Karten zurück..." : "🔄 Alle Karten neu aufbauen"}
+              </button>
               <button
                 onClick={() => {
                   setDiagnosisUnlocked(false);
@@ -2335,29 +2442,21 @@ async function submitLearningAnswer() {
                       </>
                     )}
  
+    
+                    {item.example_sentence_target ? (
+                      <div style={{ marginTop: 8 }}>
+                       <strong>Beispielsatz ({targetLanguage || "Fremdsprache"}):</strong> {item.example_sentence_target}
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: 8 }}>
+                        Beispiel wird generiert
+                      </div>
+                    )}
 
-                    <div style={{ marginTop: 8 }}>
-                        {getExampleSentenceText(item)
-                          ? `Beispielsatz: ${getExampleSentenceText(item)}`
-                          : "Beispiel wird generiert"}
-                    </div>
-
-                    {item.dialogue_line_1 && item.dialogue_line_2 && (
-                        <div
-                        style={{
-                            marginTop: 10,
-                            padding: 10,
-                            background: "#f8f8f8",
-                            borderRadius: 8,
-                        }}
-                        >
-                        <div>
-                            <b>A:</b> {item.dialogue_line_1}
-                        </div>
-                        <div style={{ marginTop: 4 }}>
-                            <b>B:</b> {item.dialogue_line_2}
-                        </div>
-                        </div>
+                    {item.example_sentence_source && (
+                      <div style={{ marginTop: 6, color: "#555" }}>
+                        <strong>Übersetzung ({sourceLanguage || "Deutsch"}):</strong> {item.example_sentence_source}
+                      </div>
                     )}
                     </div>
                 ))}
