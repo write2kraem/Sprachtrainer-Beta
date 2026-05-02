@@ -25,3 +25,5 @@ yarn-error.log*
 ~$*.docx
 ~$*.xlsx
 
+*.log
+backend/data/state.json
