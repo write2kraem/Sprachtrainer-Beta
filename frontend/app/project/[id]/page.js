@@ -545,9 +545,15 @@ useEffect(() => {
 function getSpeechSynthesisLanguage() {
   const normalizedTarget = (targetLanguage || "").trim().toLowerCase();
 
-  if (normalizedTarget.includes("portug")) return "pt-PT";
-  if (normalizedTarget.includes("portugu")) return "pt-PT";
-  if (normalizedTarget.includes("brasil")) return "pt-BR";
+  if (normalizedTarget.includes("mex")) return "es-MX";
+  if (normalizedTarget.includes("span") || normalizedTarget.includes("españ") || normalizedTarget.includes("espan")) return "es-ES";
+  if (normalizedTarget.includes("portug") || normalizedTarget.includes("portugu")) return normalizedTarget.includes("brasil") ? "pt-BR" : "pt-PT";
+  if (normalizedTarget.includes("franz") || normalizedTarget.includes("french")) return "fr-FR";
+  if (normalizedTarget.includes("ital") || normalizedTarget.includes("italian")) return "it-IT";
+  if (normalizedTarget.includes("engl") || normalizedTarget.includes("english")) return "en-US";
+  if (normalizedTarget.includes("deutsch") || normalizedTarget.includes("german")) return "de-DE";
+  if (normalizedTarget.includes("nieder") || normalizedTarget.includes("dutch")) return "nl-NL";
+  if (normalizedTarget.includes("finn") || normalizedTarget.includes("finnish")) return "fi-FI";
 
   const languageMap = {
     deutsch: "de-DE",
@@ -556,6 +562,9 @@ function getSpeechSynthesisLanguage() {
     english: "en-US",
     spanisch: "es-ES",
     spanish: "es-ES",
+    "spanisch (mexiko)": "es-MX",
+    "spanisch mexiko": "es-MX",
+    "mexikanisches spanisch": "es-MX",
     französisch: "fr-FR",
     french: "fr-FR",
     italienisch: "it-IT",
@@ -564,9 +573,11 @@ function getSpeechSynthesisLanguage() {
     portuguese: "pt-PT",
     niederländisch: "nl-NL",
     dutch: "nl-NL",
+    finnisch: "fi-FI",
+    finnish: "fi-FI",
   };
 
-  return languageMap[normalizedTarget] || "en-US";
+  return languageMap[normalizedTarget] || "es-ES";
 }
 
 function speakText(text) {
@@ -1221,10 +1232,9 @@ async function submitLearningAnswer() {
   useEffect(() => {
     if (!showLearningMode) return;
     if (!currentWord) return;
-    if (learningPhase !== "learn") return;
 
-    setShowTranslation(true);
-  }, [showLearningMode, currentWord?.word, learningPhase]);
+    setShowTranslation(false);
+  }, [showLearningMode, currentWord?.word, learningPhase, learningDirection]);
 
   useEffect(() => {
     if (!showRoleplaySection) return;
@@ -1437,7 +1447,7 @@ async function submitLearningAnswer() {
       </a>
 
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 8 }}>
-        Sprachtrainer 4
+        Sprachtrainer 5
       </h1>
 
 
@@ -1808,12 +1818,20 @@ async function submitLearningAnswer() {
                             Nächstes Wort
                           </button>
                           {diagnosisUnlocked && (
-                            <button
-                              onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
-                              style={secondaryButtonStyle}
-                            >
-                              ✅ Karte passt
-                            </button>
+                            <>
+                              <button
+                                onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
+                                style={secondaryButtonStyle}
+                              >
+                                ✅ Karte passt
+                              </button>
+                              <button
+                                onClick={() => markVocabularyItemReviewed(currentWord.word, "edited")}
+                                style={secondaryButtonStyle}
+                              >
+                                ✏️ Korrektur nötig
+                              </button>
+                            </>
                           )}
                           <button
                             onClick={() => setShowTranslation((prev) => !prev)}
@@ -1912,12 +1930,20 @@ async function submitLearningAnswer() {
                             Nächstes Wort
                           </button>
                           {diagnosisUnlocked && (
-                            <button
-                              onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
-                              style={secondaryButtonStyle}
-                            >
-                              ✅ Karte passt
-                            </button>
+                            <>
+                              <button
+                                onClick={() => markVocabularyItemReviewed(currentWord.word, "approved")}
+                                style={secondaryButtonStyle}
+                              >
+                                ✅ Karte passt
+                              </button>
+                              <button
+                                onClick={() => markVocabularyItemReviewed(currentWord.word, "edited")}
+                                style={secondaryButtonStyle}
+                              >
+                                ✏️ Korrektur nötig
+                              </button>
+                            </>
                           )}
                           <button
                             onClick={() => setShowTranslation((prev) => !prev)}
