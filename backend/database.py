@@ -1,4 +1,5 @@
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any, List
 
@@ -22,7 +23,29 @@ def ensure_user(user_id: str) -> None:
         roleplay_db[user_id] = {}
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
-DATA_FILE = DATA_DIR / "state.json"
+DATA_FILE = DATA_DIR / "state.json"  # legacy migration source only
+DB_FILE = DATA_DIR / "sprachtrainer.sqlite3"
+
+
+def _get_connection() -> sqlite3.Connection:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(DB_FILE)
+    connection.row_factory = sqlite3.Row
+    return connection
+
+
+def init_db() -> None:
+    with _get_connection() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_state (
+                user_id TEXT PRIMARY KEY,
+                state_json TEXT NOT NULL,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.commit()
 
 
 def _project_to_dict(project: Project) -> dict:
@@ -69,9 +92,39 @@ def _serialize_state() -> dict:
 
 
 def save_data() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with DATA_FILE.open("w", encoding="utf-8") as file:
-        json.dump(_serialize_state(), file, ensure_ascii=False, indent=2)
+    init_db()
+    state = _serialize_state()
+    users = state.get("users", {})
+
+    with _get_connection() as connection:
+        for user_id, user_state in users.items():
+            connection.execute(
+                """
+                INSERT INTO user_state (user_id, state_json, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    state_json = excluded.state_json,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (user_id, json.dumps(user_state, ensure_ascii=False)),
+            )
+        connection.commit()
+
+
+def _load_sqlite_state() -> dict[str, Any]:
+    init_db()
+    users: dict[str, Any] = {}
+
+    with _get_connection() as connection:
+        rows = connection.execute("SELECT user_id, state_json FROM user_state").fetchall()
+
+    for row in rows:
+        try:
+            users[row["user_id"]] = json.loads(row["state_json"])
+        except json.JSONDecodeError:
+            continue
+
+    return {"users": users}
 
 
 def load_data() -> None:
@@ -81,12 +134,12 @@ def load_data() -> None:
     vocabulary_db.clear()
     roleplay_db.clear()
 
-    if not DATA_FILE.exists():
-        ensure_user(DEFAULT_USER_ID)
-        return
+    raw_state = _load_sqlite_state()
 
-    with DATA_FILE.open("r", encoding="utf-8") as file:
-        raw_state: dict[str, Any] = json.load(file)
+    # One-time legacy migration from state.json if SQLite is still empty.
+    if not raw_state.get("users") and DATA_FILE.exists():
+        with DATA_FILE.open("r", encoding="utf-8") as file:
+            raw_state = json.load(file)
 
     if "users" in raw_state:
         for user_id, user_data in raw_state.get("users", {}).items():
@@ -117,6 +170,7 @@ def load_data() -> None:
                 for project_id, history in user_data.get("roleplay", {}).items()
             }
 
+        save_data()
         ensure_user(DEFAULT_USER_ID)
         return
 
@@ -148,4 +202,5 @@ def load_data() -> None:
     }
 
 
+init_db()
 load_data()
