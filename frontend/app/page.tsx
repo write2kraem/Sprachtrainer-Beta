@@ -16,6 +16,7 @@ type Project = {
 const USER_ID_STORAGE_KEY = "sprachtrainer_user_id";
 const USER_EMAIL_STORAGE_KEY = "sprachtrainer_user_email";
 const USER_NAME_STORAGE_KEY = "sprachtrainer_user_name";
+const HIDE_WELCOME_KEY = "sprachtrainer_hide_welcome";
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
@@ -41,6 +42,8 @@ export default function HomePage() {
   const [emailInput, setEmailInput] = useState<string>("");
   const [identityError, setIdentityError] = useState<string>("");
   const router = useRouter();
+  const [showWelcome, setShowWelcome] = useState<boolean>(true);
+  const [hideWelcomeChecked, setHideWelcomeChecked] = useState<boolean>(false);
 
   function userHeaders() {
     return {
@@ -149,6 +152,13 @@ export default function HomePage() {
       }
     }
   }, [projects, selectedLanguage, newLanguageName]);
+
+  useEffect(() => {
+    const hidden = window.localStorage.getItem(HIDE_WELCOME_KEY);
+    if (hidden === "true") {
+      setShowWelcome(false);
+    }
+  }, []);
 
   function loginOrRegister() {
     setIdentityError("");
@@ -267,6 +277,92 @@ export default function HomePage() {
     }
   }
 
+  function handleStart() {
+    if (hideWelcomeChecked) {
+      window.localStorage.setItem(HIDE_WELCOME_KEY, "true");
+    }
+    setShowWelcome(false);
+  }
+
+  if (showWelcome) {
+    return (
+      <main style={{ maxWidth: 900, margin: "0 auto", padding: 32 }}>
+        <section
+          style={{
+            border: "1px solid #ddd",
+            borderRadius: 20,
+            padding: 28,
+            background: "#fafafa",
+          }}
+        >
+          <p style={{ margin: "0 0 8px", color: "#666", fontSize: 14 }}>
+            Beta-Version-XL
+          </p>
+          <h1 style={{ fontSize: 34, fontWeight: "bold", margin: "0 0 12px" }}>
+            Lerne Sprache für dein echtes Leben.
+          </h1>
+          <p style={{ fontSize: 17, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
+            Dieser Sprachtrainer funktioniert anders als klassische Apps.
+            Du lernst nicht allgemeine Vokabeln, sondern genau die Sprache,
+            die du in deinen eigenen Situationen wirklich brauchst.
+          </p>
+          <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
+            Dafür erstellen wir gemeinsam dein persönliches Sprachprojekt.
+            Du beschreibst kurz, was du vorhast – und daraus entstehen automatisch
+            deine Vokabeln, Fragen und Dialoge.
+          </p>
+          <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 16px", color: "#333" }}>
+            Je konkreter du bist, desto besser wird dein Ergebnis.
+            Deine Daten bleiben privat und sind nur für dich sichtbar.
+          </p>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+            {["Urlaub in Portugal", "Segeltörn in Kroatien", "Restaurant & Smalltalk", "Tauchkurs"].map((example) => (
+              <span
+                key={example}
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: 999,
+                  padding: "7px 11px",
+                  background: "white",
+                  fontSize: 14,
+                }}
+              >
+                {example}
+              </span>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              onClick={handleStart}
+              style={{
+                padding: "12px 18px",
+                borderRadius: 10,
+                border: "1px solid #333",
+                background: "white",
+                cursor: "pointer",
+                fontWeight: "bold",
+              }}
+            >
+              Loslegen
+            </button>
+
+            <label style={{ fontSize: 14, color: "#555" }}>
+              <input
+                type="checkbox"
+                checked={hideWelcomeChecked}
+                onChange={(e) => setHideWelcomeChecked(e.target.checked)}
+                style={{ marginRight: 6 }}
+              />
+              Nicht mehr anzeigen
+            </label>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main style={{ maxWidth: 900, margin: "0 auto", padding: 32 }}>
       <section
@@ -360,52 +456,6 @@ export default function HomePage() {
         )}
       </section>
 
-      <section
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 20,
-          padding: 28,
-          marginBottom: 24,
-          background: "#fafafa",
-        }}
-      >
-        <p style={{ margin: "0 0 8px", color: "#666", fontSize: 14 }}>
-          Beta-Version-XL
-        </p>
-        <h1 style={{ fontSize: 34, fontWeight: "bold", margin: "0 0 12px" }}>
-          Lerne Sprache für dein echtes Leben.
-        </h1>
-        <p style={{ fontSize: 17, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
-          Dieser Sprachtrainer funktioniert anders als klassische Apps.
-          Du lernst nicht allgemeine Vokabeln, sondern genau die Sprache,
-          die du in deinen eigenen Situationen wirklich brauchst.
-        </p>
-        <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
-          Dafür erstellen wir gemeinsam dein persönliches Sprachprojekt.
-          Du beschreibst kurz, was du vorhast – und daraus entstehen automatisch
-          deine Vokabeln, Fragen und Dialoge.
-        </p>
-        <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 16px", color: "#333" }}>
-          Je konkreter du bist, desto besser wird dein Ergebnis.
-        </p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {["Urlaub in Portugal", "Segeltörn in Kroatien", "Restaurant & Smalltalk auf Spanisch", "Französisch für den Tauchkurs"].map((example) => (
-            <span
-              key={example}
-              style={{
-                border: "1px solid #ddd",
-                borderRadius: 999,
-                padding: "7px 11px",
-                background: "white",
-                color: "#333",
-                fontSize: 14,
-              }}
-            >
-              {example}
-            </span>
-          ))}
-        </div>
-      </section>
 
       <h1 style={{ fontSize: 32, fontWeight: "bold", marginBottom: 24 }}>
         Sprachtrainer

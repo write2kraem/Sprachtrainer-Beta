@@ -1805,6 +1805,20 @@ async function submitLearningAnswer() {
                     )}
                     {learningPhase === "practice" ? (
                       <>
+                        {getExampleSentenceText(currentWord) && (
+                          <div
+                            style={{
+                              marginTop: 18,
+                              padding: 14,
+                              background: "#f8f8f8",
+                              borderRadius: 10,
+                              color: "#444",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            <strong>Bsp:</strong> {getExampleSentenceText(currentWord)}
+                          </div>
+                        )}
                         <div style={{ marginTop: 20 }}>
                           <div style={{ fontWeight: 600, marginBottom: 8 }}>
                             Deine Übersetzung
@@ -1919,12 +1933,6 @@ async function submitLearningAnswer() {
                             {showTranslation ? "Zurück zur Vorderseite" : "Übersetzung anzeigen"}
                           </button>
 
-                          <button
-                            onClick={() => setShowExampleSentence((prev) => !prev)}
-                            style={secondaryButtonStyle}
-                          >
-                            {showExampleSentence ? "Beispiel ausblenden" : "Gib mir ein Beispiel"}
-                          </button>
                         </div>
 
                         {learningFeedback && (
@@ -2000,6 +2008,20 @@ async function submitLearningAnswer() {
                         <div style={{ marginTop: 20, color: "#555", lineHeight: 1.6 }}>
                           Höre dir das Wort an, blende die Übersetzung ein und schau dir den Beispielsatz an. Im Modus „Üben“ kannst du dann selbst antworten.
                         </div>
+                        {getExampleSentenceText(currentWord) && (
+                          <div
+                            style={{
+                              marginTop: 18,
+                              padding: 14,
+                              background: "#f8f8f8",
+                              borderRadius: 10,
+                              color: "#444",
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            <strong>Bsp:</strong> {getExampleSentenceText(currentWord)}
+                          </div>
+                        )}
 
                         <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
                           <button
@@ -2031,12 +2053,6 @@ async function submitLearningAnswer() {
                             {showTranslation ? "Zurück zur Vorderseite" : "Übersetzung anzeigen"}
                           </button>
 
-                          <button
-                            onClick={() => setShowExampleSentence((prev) => !prev)}
-                            style={secondaryButtonStyle}
-                          >
-                            {showExampleSentence ? "Beispiel ausblenden" : "Gib mir ein Beispiel"}
-                          </button>
                         </div>
                       </>
                     )}

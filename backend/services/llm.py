@@ -934,16 +934,27 @@ Kategorie: {category or ''}
 
 Regeln:
 - bewerte die Antwort als Übersetzung genau dieses einzelnen Wortes oder dieser Phrase
+- vergleiche direkt zwischen Wort/Phrase, expected und answer
+- verwende niemals Englisch als Zwischensprache, Vergleichsbasis oder Erklärung
+- nenne im Feedback keine englischen Übersetzungen wie "to find", "to meet" oder "to take"
+- Feedback muss vollständig auf Deutsch sein und direkt zwischen Zielsprache und Antwortsprache erklären
 - answer und expected stehen bereits in derselben Sprache und müssen direkt miteinander verglichen werden
-- expected ist die Referenzlösung für dieses Wort und darf nicht inhaltlich umgedeutet, rückübersetzt oder durch eine andere deutsche Formulierung ersetzt werden
-- bewerte nicht, ob im Kontext eine natürlichere Umschreibung existiert, sondern ob answer eine richtige deutsche Zielübersetzung von word ist
-- preferred darf nur eine sehr nahe alternative deutsche Form sein, wenn answer inhaltlich korrekt ist
+- expected ist die kontextbezogene Referenzlösung für dieses Wort
+- expected ist nicht automatisch die einzige mögliche Wörterbuchübersetzung
+- wenn der sichtbare Kontext oder Beispielsatz die Bedeutung klar festlegt, bewerte answer gegen genau diese Bedeutung
+- wenn answer eine grundsätzlich gültige Nebenbedeutung des Wortes ist, aber nicht zur kontextbezogenen Bedeutung passt, ist die Antwort "acceptable", außer der sichtbare Kontext macht sie eindeutig widersprüchlich
+- wenn answer eine gültige Übersetzung des Wortes in einem anderen Kontext ist und der Kontext nicht eindeutig widerspricht, ist die Antwort "acceptable"
+- wenn answer wegen des sichtbaren Kontextes eindeutig eine falsche Bedeutung trifft, ist sie "incorrect"
+- preferred darf nur eine sehr nahe alternative deutsche Form sein, wenn answer inhaltlich korrekt oder akzeptabel ist
 - preferred darf die Bedeutung von expected nicht verändern
-- "correct" = answer entspricht expected oder ist nahezu gleichbedeutend in derselben Sprache
-- "acceptable" = answer ist in derselben Sprache inhaltlich richtig, aber etwas weniger üblich oder etwas weniger präzise
-- "incorrect" = answer bezeichnet eine andere Bedeutung oder eine andere Übersetzung
+- "correct" = answer entspricht expected oder ist nahezu gleichbedeutend in derselben Sprache und passt zum Kontext
+- "acceptable" = answer ist in derselben Sprache inhaltlich grundsätzlich richtig, aber weniger üblich, weniger präzise oder nicht die bevorzugte Kontextübersetzung
+- "acceptable" = answer ist eine gültige Übersetzung des Wortes in einem anderen Kontext, aber nicht die bevorzugte Übersetzung im aktuellen Kontext
+- "acceptable" = answer enthält leichte Rechtschreibfehler, Tippfehler oder kleine grammatische Fehler, ist aber eindeutig verständlich
+- "incorrect" = answer bezeichnet eine eindeutig andere, im Kontext falsche Bedeutung oder eine andere Übersetzung
 - Wenn die Antwort mehrere alternative Übersetzungen ohne grammatische Verbindung aneinanderreiht, ist sie incorrect.
 - Beispiel: "dar proporcionar" ist incorrect, weil "dar" und "proporcionar" zwei Alternativen sind, keine gültige Phrase.
+- Wenn die Antwort semantisch klar verständlich ist, aber nicht exakt der erwarteten Form entspricht, bevorzuge "acceptable" statt "incorrect".
 - Feedback kurz, freundlich und konkret auf Deutsch
 - formuliere das Feedback semantisch und kontextbezogen, nicht formalistisch
 - sage nicht einfach, dass expected korrekt sei, wenn der Kontext eher eine andere Bedeutung nahelegt
