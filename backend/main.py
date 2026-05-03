@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from models import Project, Message, NewMessage, ProjectSlots
-from database import DEFAULT_USER_ID, ensure_user, projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data, DATA_DIR, DB_FILE
+from database import DEFAULT_USER_ID, ensure_user, projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data, DATA_DIR, DB_FILE, save_feedback_entry, load_feedback_entries
 from services.interview import get_next_question, update_slots
 from services.llm import generate_roleplay_opening, continue_roleplay, evaluate_learning_answer_llm
 from services.vocabulary import extract_vocabulary_from_slots, expand_vocabulary_item, rebuild_vocabulary_item, normalize_lookup_key, update_vocabulary_learning_state
@@ -32,46 +32,23 @@ def get_user_id(request: Request) -> str:
     return user_id
 
 
-FEEDBACK_DIR = Path(__file__).resolve().parent / "data"
-FEEDBACK_FILE = FEEDBACK_DIR / "feedback.json"
-
-
-def load_feedback_entries() -> list[dict[str, Any]]:
-    if not FEEDBACK_FILE.exists():
-        return []
-
-    with FEEDBACK_FILE.open("r", encoding="utf-8") as file:
-        raw_entries = json.load(file)
-
-    if not isinstance(raw_entries, list):
-        return []
-
-    return raw_entries
-
-
-def save_feedback_entries(entries: list[dict[str, Any]]) -> None:
-    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
-    with FEEDBACK_FILE.open("w", encoding="utf-8") as file:
-        json.dump(entries, file, ensure_ascii=False, indent=2)
 
 
 
 @app.post("/feedback")
 def submit_feedback(payload: dict[str, Any], request: Request):
     user_id = get_user_id(request)
-    entries = load_feedback_entries()
 
     entry = {
         "user_id": user_id,
         **payload,
     }
 
-    entries.append(entry)
-    save_feedback_entries(entries)
+    saved = save_feedback_entry(entry)
 
     return {
         "message": "Feedback gespeichert",
-        "count": len(entries),
+        "id": saved.get("id"),
     }
 
 

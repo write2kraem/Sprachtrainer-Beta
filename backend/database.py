@@ -31,6 +31,7 @@ else:
     DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_FILE = DATA_DIR / "state.json"  # legacy migration source only
 DB_FILE = DATA_DIR / "sprachtrainer.sqlite3"
+FEEDBACK_FILE = DATA_DIR / "feedback.json"  # legacy migration source only
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -48,6 +49,22 @@ def init_db() -> None:
                 user_id TEXT PRIMARY KEY,
                 state_json TEXT NOT NULL,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS feedback_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                project_id INTEGER,
+                rating INTEGER,
+                main_problem TEXT,
+                comment TEXT,
+                mode TEXT,
+                word TEXT,
+                payload_json TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -133,6 +150,127 @@ def _load_sqlite_state() -> dict[str, Any]:
     return {"users": users}
 
 
+# Feedback persistence helpers
+def save_feedback_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    init_db()
+
+    user_id = str(entry.get("user_id") or DEFAULT_USER_ID)
+    project_id = entry.get("project_id")
+    rating = entry.get("rating")
+    main_problem = entry.get("main_problem") or entry.get("mainProblem")
+    comment = entry.get("comment") or entry.get("notes") or entry.get("feedback")
+    mode = entry.get("mode")
+    word = entry.get("word")
+
+    payload_json = json.dumps(entry, ensure_ascii=False)
+
+    with _get_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO feedback_entries (
+                user_id,
+                project_id,
+                rating,
+                main_problem,
+                comment,
+                mode,
+                word,
+                payload_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                project_id,
+                rating,
+                main_problem,
+                comment,
+                mode,
+                word,
+                payload_json,
+            ),
+        )
+        connection.commit()
+        feedback_id = cursor.lastrowid
+
+    saved_entry = dict(entry)
+    saved_entry["id"] = feedback_id
+    saved_entry["user_id"] = user_id
+    return saved_entry
+
+
+def load_feedback_entries(limit: int = 500) -> list[dict[str, Any]]:
+    init_db()
+
+    with _get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                id,
+                user_id,
+                project_id,
+                rating,
+                main_problem,
+                comment,
+                mode,
+                word,
+                payload_json,
+                created_at
+            FROM feedback_entries
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    entries: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"] or "{}")
+        except json.JSONDecodeError:
+            payload = {}
+
+        payload.update(
+            {
+                "id": row["id"],
+                "user_id": row["user_id"],
+                "project_id": row["project_id"],
+                "rating": row["rating"],
+                "main_problem": row["main_problem"],
+                "comment": row["comment"],
+                "mode": row["mode"],
+                "word": row["word"],
+                "created_at": row["created_at"],
+            }
+        )
+        entries.append(payload)
+
+    return entries
+
+
+def migrate_feedback_json_if_needed() -> None:
+    init_db()
+
+    with _get_connection() as connection:
+        existing_count = connection.execute("SELECT COUNT(*) FROM feedback_entries").fetchone()[0]
+
+    if existing_count > 0 or not FEEDBACK_FILE.exists():
+        return
+
+    try:
+        with FEEDBACK_FILE.open("r", encoding="utf-8") as file:
+            legacy_entries = json.load(file)
+    except (json.JSONDecodeError, OSError):
+        return
+
+    if not isinstance(legacy_entries, list):
+        return
+
+    for entry in legacy_entries:
+        if isinstance(entry, dict):
+            save_feedback_entry(entry)
+
+
 def load_data() -> None:
     projects_db.clear()
     interviews_db.clear()
@@ -209,4 +347,5 @@ def load_data() -> None:
 
 
 init_db()
+migrate_feedback_json_if_needed()
 load_data()
