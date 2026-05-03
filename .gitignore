@@ -27,3 +27,4 @@ yarn-error.log*
 
 *.log
 backend/data/state.json
+backend/data/*.sqlite3
