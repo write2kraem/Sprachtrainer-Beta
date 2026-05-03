@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any, List
@@ -22,7 +23,12 @@ def ensure_user(user_id: str) -> None:
         vocabulary_db[user_id] = {}
         roleplay_db[user_id] = {}
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+data_dir_env = os.getenv("DATA_DIR")
+
+if data_dir_env:
+    DATA_DIR = Path(data_dir_env)
+else:
+    DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_FILE = DATA_DIR / "state.json"  # legacy migration source only
 DB_FILE = DATA_DIR / "sprachtrainer.sqlite3"
 
@@ -34,7 +40,7 @@ def _get_connection() -> sqlite3.Connection:
     return connection
 
 
-def init_db() -> None:
+def init_db() -> None:‚
     with _get_connection() as connection:
         connection.execute(
             """
