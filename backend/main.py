@@ -7,7 +7,7 @@ from models import Project, Message, NewMessage, ProjectSlots
 from database import DEFAULT_USER_ID, ensure_user, projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data, DATA_DIR, DB_FILE
 from services.interview import get_next_question, update_slots
 from services.llm import generate_roleplay_opening, continue_roleplay, evaluate_learning_answer_llm
-from services.vocabulary import extract_vocabulary_from_slots, expand_vocabulary_item, rebuild_vocabulary_item, normalize_lookup_key
+from services.vocabulary import extract_vocabulary_from_slots, expand_vocabulary_item, rebuild_vocabulary_item, normalize_lookup_key, update_vocabulary_learning_state
 
 app = FastAPI()
 app.add_middleware(
@@ -449,3 +449,37 @@ def evaluate_learning_answer(project_id: int, payload: dict, request: Request):
         category=payload.get("category"),
         direction=payload.get("direction", "target-first"),
     )
+
+
+# New endpoint: Update learning state
+@app.post("/projects/{project_id}/vocabulary/{word}/learning-state")
+def update_learning_state(project_id: int, word: str, payload: dict, request: Request):
+    user_id = get_user_id(request)
+
+    result = payload.get("result")
+    timestamp = payload.get("timestamp")
+
+    if not isinstance(result, str):
+        raise HTTPException(status_code=400, detail="Invalid result")
+
+    item = update_vocabulary_learning_state(
+        project_id=project_id,
+        word=word,
+        result=result,
+        timestamp=timestamp,
+        user_id=user_id,
+    )
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Wort nicht gefunden")
+
+    save_data()
+
+    return {
+        "status": "ok",
+        "word": item.word,
+        "mastered": item.mastered,
+        "wrong_count": item.wrong_count,
+        "last_correct": item.last_correct,
+        "last_wrong": item.last_wrong,
+    }

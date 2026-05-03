@@ -626,3 +626,46 @@ def rebuild_vocabulary_item(project_id: int, word: str, user_id: str = DEFAULT_U
     target_item.expanded = False
 
     return expand_vocabulary_item(project_id, word, user_id=user_id)
+
+
+# New function: update_vocabulary_learning_state
+def update_vocabulary_learning_state(
+    project_id: int,
+    word: str,
+    result: str,
+    timestamp: Optional[int] = None,
+    user_id: str = DEFAULT_USER_ID,
+) -> Optional[VocabularyItem]:
+    ensure_user(user_id)
+
+    if project_id not in vocabulary_db[user_id]:
+        return None
+
+    target_item = next(
+        (
+            item
+            for item in vocabulary_db[user_id][project_id]
+            if normalize_lookup_key(item.word) == normalize_lookup_key(word)
+        ),
+        None,
+    )
+
+    if not target_item:
+        return None
+
+    normalized_result = normalize_lookup_key(result)
+
+    if normalized_result in {"correct", "mastered", "success"}:
+        target_item.mastered = True
+        target_item.last_correct = timestamp
+        target_item.last_wrong = None
+        target_item.wrong_count = 0
+        return target_item
+
+    if normalized_result in {"incorrect", "wrong", "error"}:
+        target_item.mastered = False
+        target_item.last_wrong = timestamp
+        target_item.wrong_count = (target_item.wrong_count or 0) + 1
+        return target_item
+
+    return target_item

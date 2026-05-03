@@ -37,6 +37,7 @@ export default function ProjectPage({ params }) {
   const [wrongAnswerWords, setWrongAnswerWords] = useState({});
   const [learningAnswer, setLearningAnswer] = useState("");
   const [learningFeedback, setLearningFeedback] = useState(null);
+  const [lockedLearningWord, setLockedLearningWord] = useState(null);
   const [isRebuildingCard, setIsRebuildingCard] = useState(false);
   const [seenWords, setSeenWords] = useState({});
   const [activeSpeechField, setActiveSpeechField] = useState("interview");
@@ -710,11 +711,52 @@ function isAnswerCorrect(answer, expected) {
   );
 }
 
+async function persistLearningState(word, result) {
+  if (!word || !result) return;
+
+  try {
+    const res = await fetch(
+      apiUrl(`/projects/${projectId}/vocabulary/${encodeURIComponent(word)}/learning-state`),
+      {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({
+          result,
+          timestamp: Date.now(),
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("Learning state update failed");
+    }
+
+    const updatedState = await res.json();
+
+    setVocabulary((prev) =>
+      prev.map((item) =>
+        item.word === updatedState.word
+          ? {
+              ...item,
+              mastered: updatedState.mastered,
+              wrong_count: updatedState.wrong_count,
+              last_correct: updatedState.last_correct,
+              last_wrong: updatedState.last_wrong,
+            }
+          : item
+      )
+    );
+  } catch (err) {
+    console.error("Learning-State konnte nicht gespeichert werden", err);
+  }
+}
+
 async function submitLearningAnswer() {
   if (!currentWord) return;
 
   const expected = getExpectedLearningAnswer(currentWord);
   const answer = learningAnswer.trim();
+  setLockedLearningWord(currentWord);
 
   if (!answer) {
     setLearningFeedback({
@@ -745,6 +787,7 @@ async function submitLearningAnswer() {
       delete next[currentWord.word];
       return next;
     });
+    persistLearningState(currentWord.word, "correct");
     const retryStore = window.__retryCounts || (window.__retryCounts = {});
     const queue = window.__reinsertQueue || (window.__reinsertQueue = []);
     retryStore[currentWord.word] = 0;
@@ -799,6 +842,7 @@ async function submitLearningAnswer() {
           delete next[currentWord.word];
           return next;
         });
+        persistLearningState(currentWord.word, "correct");
       } else {
         setMasteredWords((prev) => ({
           ...prev,
@@ -821,6 +865,7 @@ async function submitLearningAnswer() {
         ...prev,
         [currentWord.word]: Date.now(),
       }));
+      persistLearningState(currentWord.word, "incorrect");
       setLearningFeedback({
         type: "error",
         text: evaluation.feedback || `Noch nicht richtig. Erwartet war: ${evaluation.preferred || expected}`,
@@ -831,6 +876,7 @@ async function submitLearningAnswer() {
       ...prev,
       [currentWord.word]: Date.now(),
     }));
+    persistLearningState(currentWord.word, "incorrect");
     setLearningFeedback({
       type: "error",
       text: `Noch nicht richtig. Erwartet war: ${expected}`,
@@ -844,6 +890,7 @@ async function submitLearningAnswer() {
     function resetLearningCardState() {
       setLearningAnswer("");
       setLearningFeedback(null);
+      setLockedLearningWord(null);
       setShowTranslation(false);
       setShowExampleSentence(false);
       setLiveTranscript("");
@@ -860,14 +907,14 @@ async function submitLearningAnswer() {
       // 3. persönliche Interview-/Kontextwörter
       // 4. Review-relevante Karten
       // 5. Grundwortschatz zuletzt, aber Verben bleiben trotzdem weit oben
-      if (wrongAnswerWords[item.word]) score += 100;
+      if (wrongAnswerWords[item.word] || item.last_wrong || (item.wrong_count || 0) > 0) score += 100;
       if (isVerb) score += 80;
       if (item.source === "description") score += 60;
       if (item.source === "situation_core") score += 50;
       if (item.review_status === "edited") score += 30;
       if (item.review_status === "new") score += 10;
       if (item.source === "base_core" && !isVerb) score -= 20;
-
+      if (item.mastered && item.last_correct) score -= 40;
       return score;
     }
 
@@ -884,13 +931,16 @@ async function submitLearningAnswer() {
 
     const activeVocabulary = showLearningMode ? learningVocabulary : vocabulary;
 
-    const currentWord =
+    const currentWordFromList =
       Array.isArray(activeVocabulary) && activeVocabulary.length > 0
         ? activeVocabulary[currentIndex % activeVocabulary.length]
         : null;
 
+    const currentWord = lockedLearningWord || currentWordFromList;
+
     function nextWord() {
       if (activeVocabulary.length === 0) return;
+      setLockedLearningWord(null);
 
       if (learningPhase === "learn" && currentWord?.word) {
         setSeenWords((prev) => ({
@@ -1061,7 +1111,9 @@ async function submitLearningAnswer() {
     const learningTarget = 100;
     const roleplayTarget = 30;
     const coreCount = Array.isArray(vocabulary) ? vocabulary.length : 0;
-    const masteredCount = Object.keys(masteredWords).length;
+    const masteredCount = Array.isArray(vocabulary)
+      ? vocabulary.filter((item) => item.mastered || masteredWords[item.word]?.mastered).length
+      : Object.keys(masteredWords).length;
 
     const effectiveLevel = projectRawLevel || "Anfänger";
     const isBasicOrHigher =
@@ -1357,6 +1409,22 @@ async function submitLearningAnswer() {
     }
 
     return { ...base, background: "#eef4ff", color: "#245fd1", border: "1px solid #c8dafd" };
+  }
+
+  function getLearningStatusLabel(item) {
+    if (!item) return "neu";
+    if (item.mastered || masteredWords[item.word]?.mastered) return "gekonnt";
+    if (masteredWords[item.word]?.lastWarning) return "fast richtig";
+    if (item.last_wrong || (item.wrong_count || 0) > 0 || wrongAnswerWords[item.word]) return "zuletzt falsch";
+    return "neu";
+  }
+
+  function getLearningStatusText(item) {
+    const status = getLearningStatusLabel(item);
+    if (status === "gekonnt") return "🟢 gekonnt";
+    if (status === "fast richtig") return "🟡 fast";
+    if (status === "zuletzt falsch") return "🔴 falsch";
+    return "⚪ neu";
   }
 
   async function markVocabularyItemReviewed(word, reviewStatus = "approved") {
@@ -1683,6 +1751,17 @@ async function submitLearningAnswer() {
                           : getSourceText(currentWord)}
                       </div>
 
+                      <span style={getReviewBadgeStyle(
+                        getLearningStatusLabel(currentWord) === "gekonnt"
+                          ? "approved"
+                          : getLearningStatusLabel(currentWord) === "fast richtig"
+                          ? "edited"
+                          : getLearningStatusLabel(currentWord) === "zuletzt falsch"
+                          ? "rejected"
+                          : "new"
+                      )}>
+                        {getLearningStatusText(currentWord)}
+                      </span>
                       {diagnosisUnlocked && (
                         <span style={getReviewBadgeStyle(currentWord.review_status)}>
                           {getReviewStatusLabel(currentWord.review_status)}
@@ -2374,6 +2453,17 @@ async function submitLearningAnswer() {
                             : getSourceText(item)}
                         </div>
 
+                        <span style={getReviewBadgeStyle(
+                          getLearningStatusLabel(item) === "gekonnt"
+                            ? "approved"
+                            : getLearningStatusLabel(item) === "fast richtig"
+                            ? "edited"
+                            : getLearningStatusLabel(item) === "zuletzt falsch"
+                            ? "rejected"
+                            : "new"
+                        )}>
+                          {getLearningStatusText(item)}
+                        </span>
                         {diagnosisUnlocked && (
                           <span style={getReviewBadgeStyle(item.review_status)}>
                             {getReviewStatusLabel(item.review_status)}

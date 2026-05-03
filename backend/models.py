@@ -41,3 +41,7 @@ class VocabularyItem(BaseModel):
     translation: Optional[str] = None
     sample_answer: Optional[str] = None
     review_status: str = "new"
+    mastered: bool = False
+    last_correct: Optional[int] = None
+    last_wrong: Optional[int] = None
+    wrong_count: int = 0
