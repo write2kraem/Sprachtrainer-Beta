@@ -40,7 +40,7 @@ def _get_connection() -> sqlite3.Connection:
     return connection
 
 
-def init_db() -> None:‚
+def init_db() -> None:
     with _get_connection() as connection:
         connection.execute(
             """
