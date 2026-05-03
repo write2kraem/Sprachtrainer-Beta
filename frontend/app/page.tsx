@@ -286,54 +286,139 @@ export default function HomePage() {
 
   if (showWelcome) {
     return (
-      <main style={{ maxWidth: 900, margin: "0 auto", padding: 32 }}>
+      <main
+        style={{
+          position: "relative",
+          minHeight: "100vh",
+          padding: 32,
+          overflow: "hidden",
+        }}
+      >
+        <style jsx>{`
+          @keyframes welcomeWordFloat {
+            0% { transform: translate3d(0, 0, 0) rotate(var(--word-rotation)); }
+            12% { transform: translate3d(var(--float-x1), var(--float-y1), 0) rotate(calc(var(--word-rotation) + 0.6deg)); }
+            27% { transform: translate3d(var(--float-x2), var(--float-y2), 0) rotate(calc(var(--word-rotation) - 0.8deg)); }
+            43% { transform: translate3d(var(--float-x3), var(--float-y3), 0) rotate(calc(var(--word-rotation) + 1.1deg)); }
+            61% { transform: translate3d(var(--float-x4), var(--float-y4), 0) rotate(calc(var(--word-rotation) - 0.5deg)); }
+            78% { transform: translate3d(var(--float-x5), var(--float-y5), 0) rotate(calc(var(--word-rotation) + 0.9deg)); }
+            100% { transform: translate3d(0, 0, 0) rotate(var(--word-rotation)); }
+          }
+        `}</style>
+        <div
+          style={{
+            position: "absolute",
+            inset: -80,
+            overflow: "hidden",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        >
+          {[
+            "aprender", "entender", "hablar", "preguntar",
+            "responder", "escuchar", "decidir", "viajar"
+          ].map((word, i) => (
+            <span
+              key={word + i}
+              style={{
+                position: "absolute",
+                top: `${8 + (i % 4) * 22}%`,
+                left: `${-8 + (i * 18) % 110}%`,
+                fontSize: 38 + (i % 3) * 14,
+                color: "#64748b",
+                opacity: 0.13,
+                fontWeight: 700,
+                letterSpacing: "0.02em",
+                ["--word-rotation" as string]: `${(i % 5) * 10 - 20}deg`,
+                ["--float-x1" as string]: `${8 + i * 2}px`,
+                ["--float-y1" as string]: `${-12 - (i % 3) * 4}px`,
+                ["--float-x2" as string]: `${22 - (i % 4) * 5}px`,
+                ["--float-y2" as string]: `${6 + (i % 2) * 8}px`,
+                ["--float-x3" as string]: `${-10 - (i % 3) * 4}px`,
+                ["--float-y3" as string]: `${12 - (i % 4) * 3}px`,
+                ["--float-x4" as string]: `${16 + (i % 5) * 3}px`,
+                ["--float-y4" as string]: `${-4 + (i % 3) * 7}px`,
+                ["--float-x5" as string]: `${-6 + (i % 4) * 6}px`,
+                ["--float-y5" as string]: `${-16 + (i % 5) * 5}px`,
+                animation: `welcomeWordFloat ${36 + i * 5}s ease-in-out infinite`,
+                animationDelay: `${i * -1.7}s`,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {word}
+            </span>
+          ))}
+        </div>
         <section
           style={{
+            position: "relative",
+            zIndex: 1,
+            maxWidth: 900,
+            margin: "0 auto",
             border: "1px solid #ddd",
             borderRadius: 20,
             padding: 28,
-            background: "#fafafa",
+            background: "rgba(250, 250, 250, 0.90)",
+            boxShadow: "0 18px 60px rgba(15, 23, 42, 0.08)",
           }}
         >
           <p style={{ margin: "0 0 8px", color: "#666", fontSize: 14 }}>
-            Beta-Version-XL
+            Beta-Version
           </p>
           <h1 style={{ fontSize: 34, fontWeight: "bold", margin: "0 0 12px" }}>
-            Lerne Sprache für dein echtes Leben.
+            Lerne Sprache entlang deines eigenen Sprachbedarfs.
           </h1>
           <p style={{ fontSize: 17, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
-            Dieser Sprachtrainer funktioniert anders als klassische Apps.
-            Du lernst nicht allgemeine Vokabeln, sondern genau die Sprache,
-            die du in deinen eigenen Situationen wirklich brauchst.
+            Die meisten Sprachlernangebote folgen einem festen Curriculum:
+            standardisierte Vokabellisten, vorgegebene Themen und ein linearer Lernpfad.
+            Das ist effizient für Inhalte – aber selten für Menschen.
           </p>
+
+          <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 6px", color: "#333" }}>
+            Dieser Trainer basiert auf einem anderen Ansatz.
+            Er orientiert sich an etablierten Prinzipien der Sprachdidaktik und Kognitionsforschung:
+            Sprache wird dann besonders effektiv erworben, wenn sie kontextgebunden,
+            bedeutungsvoll und unmittelbar anwendbar ist.
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.5, margin: "0 0 14px", color: "#666" }}>
+            Vgl. u. a. Usage-Based Learning und Communicative Language Teaching.
+          </p>
+
           <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
-            Dafür erstellen wir gemeinsam dein persönliches Sprachprojekt.
-            Du beschreibst kurz, was du vorhast – und daraus entstehen automatisch
-            deine Vokabeln, Fragen und Dialoge.
-          </p>
-          <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 16px", color: "#333" }}>
-            Je konkreter du bist, desto besser wird dein Ergebnis.
-            Deine Daten bleiben privat und sind nur für dich sichtbar.
+            Statt allgemeine Vokabeln zu trainieren, ermittelt der Trainer deinen persönlichen,
+            individuellen Sprachbedarf. Dazu beschreibst du zu Beginn deine konkrete Situation.
+            Aus diesem Kontext entsteht dein persönlicher Sprachkern: relevante Verben,
+            zentrale Begriffe, passende Nuancen sowie typische Fragen und Antwortmuster.
           </p>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-            {["Urlaub in Portugal", "Segeltörn in Kroatien", "Restaurant & Smalltalk", "Tauchkurs"].map((example) => (
-              <span
-                key={example}
-                style={{
-                  border: "1px solid #ddd",
-                  borderRadius: 999,
-                  padding: "7px 11px",
-                  background: "white",
-                  fontSize: 14,
-                }}
-              >
-                {example}
-              </span>
-            ))}
-          </div>
+          <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
+            Du lernst damit nicht generische Sprache, sondern dich mit eigenen Worten auszudrücken.
+            Die Themen bestimmst du selbst, damit du den relevanten Wortschatz schnell parat hast.
+          </p>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 12px", color: "#333" }}>
+            Für dich heißt das: Du lernst nicht alles, sondern das Richtige zuerst.
+            Dein Wortschatz entsteht aus deiner Situation, deine Beispiele passen zu deinem Kontext,
+            und deine Prioritäten bestimmen die Reihenfolge. Der Aufwand zu Beginn ist gering –
+            der Effekt auf deine Lerngeschwindigkeit und deinen Lernerfolg ist erheblich.
+          </p>
+
+          <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 10px", color: "#333" }}>
+            Dir stehen dafür vier Werkzeuge zur Verfügung:
+          </p>
+
+          <ul style={{ margin: "0 0 16px 20px", padding: 0, color: "#333", lineHeight: 1.7, fontSize: 16 }}>
+            <li>Karteikarten zum schnellen Nachschlagen</li>
+            <li>Lernmodus zum Verstehen im Kontext</li>
+            <li>Übungsmodus mit Bewertung deiner Antworten</li>
+            <li>situativer Dialog für echte Gesprächssituationen</li>
+          </ul>
+
+          <p style={{ fontSize: 15, lineHeight: 1.6, margin: "0 0 16px", color: "#555" }}>
+            Deine Daten bleiben privat und sind ausschließlich für dein persönliches Lernmodell bestimmt.
+          </p>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 20 }}>
             <button
               onClick={handleStart}
               style={{
@@ -355,7 +440,7 @@ export default function HomePage() {
                 onChange={(e) => setHideWelcomeChecked(e.target.checked)}
                 style={{ marginRight: 6 }}
               />
-              Nicht mehr anzeigen
+              Diese Seite nicht mehr anzeigen
             </label>
           </div>
         </section>
