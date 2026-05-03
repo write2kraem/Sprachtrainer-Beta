@@ -2619,7 +2619,10 @@ async function submitLearningAnswer() {
             <div style={{ display: "grid", gap: 14 }}>
               <div>
                 <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                  Wie hilfreich war diese Session?
+                 Hilf uns, den Sprachtrainer zu verbessern.
+
+                Bitte bewerte deine aktuelle Lernsituation:
+              
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {[1, 2, 3, 4, 5].map((rating) => (
@@ -2642,7 +2645,7 @@ async function submitLearningAnswer() {
 
               <div>
                 <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                  Was war das Hauptproblem?
+                  Was hat nicht wie erwartet funktioniert?
                 </div>
                 <select
                   value={feedbackProblem}
