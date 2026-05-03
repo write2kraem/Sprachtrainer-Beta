@@ -4,7 +4,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from models import Project, Message, NewMessage, ProjectSlots
-from database import DEFAULT_USER_ID, ensure_user, projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data
+from database import DEFAULT_USER_ID, ensure_user, projects_db, interviews_db, slots_db, vocabulary_db, roleplay_db, save_data, DATA_DIR, DB_FILE
 from services.interview import get_next_question, update_slots
 from services.llm import generate_roleplay_opening, continue_roleplay, evaluate_learning_answer_llm
 from services.vocabulary import extract_vocabulary_from_slots, expand_vocabulary_item, rebuild_vocabulary_item, normalize_lookup_key
@@ -75,10 +75,25 @@ def submit_feedback(payload: dict[str, Any], request: Request):
     }
 
 
+
 @app.get("/feedback")
 def get_feedback(request: Request):
     get_user_id(request)
     return load_feedback_entries()
+
+
+@app.get("/debug/storage")
+def debug_storage(request: Request):
+    user_id = get_user_id(request)
+    return {
+        "user_id": user_id,
+        "DATA_DIR": str(DATA_DIR),
+        "DB_FILE": str(DB_FILE),
+        "db_exists": DB_FILE.exists(),
+        "data_dir_exists": DATA_DIR.exists(),
+        "known_users": list(projects_db.keys()),
+        "project_count_for_user": len(projects_db.get(user_id, [])),
+    }
 
 @app.get("/projects")
 def get_projects(request: Request):
